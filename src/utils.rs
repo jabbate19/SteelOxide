@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use std::{
     fmt::Display,
     fs::{read_link, read_to_string, File},
-    io::{self, stdin, stdout, BufRead},
+    io::{self, stdin, stdout, BufRead, Write},
     net::IpAddr,
     path::Path,
     process::Child,
@@ -72,7 +72,7 @@ impl UserInfo {
 }
 
 pub struct PIDInfo {
-    pub pid: u32,
+    pub pid: u64,
     pub exe: String,
     pub root: String,
     pub cwd: String,
@@ -81,7 +81,7 @@ pub struct PIDInfo {
 }
 
 impl PIDInfo {
-    pub fn new(pid: u32) -> Result<PIDInfo, Box<dyn std::error::Error>> {
+    pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
         let exe = read_link(format!("/proc/{}/exe", pid))?
             .display()
             .to_string();
@@ -133,8 +133,9 @@ pub fn exec_cmd(cmd: &str, args: &[&str], stdin_req: bool) -> Result<Child, io::
 }
 
 pub fn yes_no(question: String) -> bool {
-    print!("{} (y/n)?", question);
     loop {
+        print!("{} (y/n)? ", question);
+        stdout().flush();
         let mut input = String::new();
         stdin().read_line(&mut input).unwrap();
         match input.to_lowercase().chars().nth(0) {

@@ -41,13 +41,38 @@ impl Socket {
     }
 
     pub fn analyze_pid(&self) -> Vec<PIDInfo> {
-        todo!()
+        let mut out: Vec<PIDInfo> = Vec::new();
+        let index: u64 = 0;
+        let proc_data = String::from(&self.process);
+        let pid_locs: Vec<usize> = proc_data.match_indices("pid=").map(|(i, _)|i).collect();
+        for pid_loc in pid_locs {
+            let mut iter = proc_data.chars();
+            for _ in 0..pid_loc+4 {
+                iter.next();
+            }
+            let mut pid_end = pid_loc+4;
+            loop {
+                match iter.next() {
+                    Some(c) => {
+                        if !c.is_ascii_digit() {
+                            break;
+                        }
+                    },
+                    None => {
+                        return out;
+                    },
+                }
+                pid_end += 1;
+            }
+            out.push(PIDInfo::new(proc_data[pid_loc+4..pid_end].parse().unwrap()).unwrap());
+        }
+        out
     }
 }
 
 impl Display for Socket {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{} | {} | {} | {} | {}:{} | {}:{} | {}", self.net_id, self.state, self.recv_q, self.send_q, self.local_addr, self.local_port, self.peer_addr, self.peer_port, self.process)
     }
 }
 
@@ -57,7 +82,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ss = exec_cmd("ss",&["-tupn0"], false).unwrap().wait_with_output().unwrap();
         if ss.status.success() {
             for line in String::from_utf8_lossy(&ss.stdout).split("\n") {
-                let sock = Socket::new(line.to_string())?;
+                let sock = match Socket::new(line.to_string()) {
+                    Ok(sock) => sock,
+                    Err(_) => continue,
+                };
                 let pids = sock.analyze_pid();
                 if !safe.contains(&sock) {
                     println!("{}", sock);
