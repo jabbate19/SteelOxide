@@ -1,9 +1,13 @@
 use serde::{Deserialize, Serialize};
+use std::process::{Command, Stdio};
 use std::{
     fmt::Display,
-    fs::{File, read_link, read_to_string}, path::Path, io::{self, BufRead, stdin}, net::IpAddr,
+    fs::{read_link, read_to_string, File},
+    io::{self, stdin, stdout, BufRead},
+    net::IpAddr,
+    path::Path,
+    process::Child,
 };
-use subprocess::{ExitStatus, Popen, PopenConfig, Redirection};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SysConfig {
@@ -55,9 +59,15 @@ impl UserInfo {
     }
 
     pub fn shutdown(&self) {
-        exec_cmd(&["usermod","-L",&self.username]);
-        exec_cmd(&["usermod","-s","/bin/false",&self.username]);
-        exec_cmd(&["gpasswd","--delete",&self.username,"sudo"]);
+        exec_cmd("usermod", &["-L", &self.username], false)
+            .unwrap()
+            .wait();
+        exec_cmd("usermod", &["-s", "/bin/false", &self.username], false)
+            .unwrap()
+            .wait();
+        exec_cmd("gpasswd", &["--delete", &self.username, "sudo"], false)
+            .unwrap()
+            .wait();
     }
 }
 
@@ -94,7 +104,9 @@ impl PIDInfo {
     }
 
     pub fn terminate(&self) {
-        exec_cmd(&["kill", "-9", &self.pid.to_string()]);
+        exec_cmd("kill", &["-9", &self.pid.to_string()], false)
+            .unwrap()
+            .wait();
     }
 }
 
@@ -108,38 +120,16 @@ impl Display for PIDInfo {
     }
 }
 
-pub struct CmdResult {
-    pub out: String,
-    pub err: String,
-    pub status: ExitStatus,
-}
-
-pub fn exec_cmd(cmd: &[&str]) -> CmdResult {
-    let mut p = Popen::create(
-        cmd,
-        PopenConfig {
-            stdout: Redirection::Pipe,
-            stderr: Redirection::Pipe,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    // Obtain the output from the standard streams.
-    let (out, err) = p.communicate(None).unwrap();
-
-    if let Some(exit_status) = p.poll() {
-        // the process has finished
-    } else {
-        // it is still running, terminate it
-        p.terminate().unwrap();
-    }
-
-    CmdResult {
-        out: out.unwrap_or(String::new()),
-        err: err.unwrap_or(String::new()),
-        status: p.exit_status().unwrap(),
-    }
+pub fn exec_cmd(cmd: &str, args: &[&str], stdin_req: bool) -> Result<Child, io::Error> {
+    Command::new(cmd)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .stdin(match stdin_req {
+            true => Stdio::piped(),
+            false => Stdio::null(),
+        })
+        .spawn()
 }
 
 pub fn yes_no(question: String) -> bool {
@@ -150,10 +140,10 @@ pub fn yes_no(question: String) -> bool {
         match input.to_lowercase().chars().nth(0) {
             Some('y') => {
                 return true;
-            },
+            }
             Some('n') => {
                 return false;
-            },
+            }
             _ => continue,
         }
     }
@@ -165,7 +155,9 @@ pub fn verify_config(config: SysConfig) -> bool {
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where P: AsRef<Path>, {
+where
+    P: AsRef<Path>,
+{
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }

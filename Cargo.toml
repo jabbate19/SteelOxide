@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "3.2.22", features = ["derive"] }
+rpassword = "7.0.0"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.85"
 subprocess = "0.2.9"

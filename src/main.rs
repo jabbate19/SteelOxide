@@ -20,7 +20,4 @@ fn main() {
         None => "None, you idiot",
         Some(x) => x,
     };
-
-    println!("{}", cmd);
-    println!("{}", utils::exec_cmd(&["whoami"]).out);
 }
