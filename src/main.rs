@@ -16,8 +16,10 @@ fn main() {
         .subcommand(SubCommand::with_name("persistnt").about("Scan for persistence"))
         .get_matches();
 
-    let cmd = match app.subcommand_name() {
-        None => "None, you idiot",
-        Some(x) => x,
+    match app.subcommand_name() {
+        None => println!("Chom"),
+        Some("setup") => commands::setup::main().unwrap(),
+        Some("ssplus") => commands::ssplus::main().unwrap(),
+        Some(x) => println!("{}", x),
     };
 }

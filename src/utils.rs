@@ -11,11 +11,11 @@ use std::{
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SysConfig {
-    ip: IpAddr,
-    interface: String,
-    ports: Vec<u16>,
-    services: Vec<String>,
-    users: Vec<String>,
+    pub ip: IpAddr,
+    pub interface: String,
+    pub ports: Vec<u16>,
+    pub services: Vec<String>,
+    pub users: Vec<String>,
 }
 
 pub struct UserInfo {
@@ -59,19 +59,19 @@ impl UserInfo {
     }
 
     pub fn shutdown(&self) {
-        exec_cmd("usermod", &["-L", &self.username], false)
+        let _ = exec_cmd("usermod", &["-L", &self.username], false)
             .unwrap()
             .wait();
-        exec_cmd("usermod", &["-s", "/bin/false", &self.username], false)
+        let _ = exec_cmd("usermod", &["-s", "/bin/false", &self.username], false)
             .unwrap()
             .wait();
-        exec_cmd("gpasswd", &["--delete", &self.username, "sudo"], false)
+        let _ = exec_cmd("gpasswd", &["--delete", &self.username, "sudo"], false)
             .unwrap()
             .wait();
     }
 }
 
-struct PIDInfo {
+pub struct PIDInfo {
     pub pid: u32,
     pub exe: String,
     pub root: String,
@@ -104,7 +104,7 @@ impl PIDInfo {
     }
 
     pub fn terminate(&self) {
-        exec_cmd("kill", &["-9", &self.pid.to_string()], false)
+        let _ = exec_cmd("kill", &["-9", &self.pid.to_string()], false)
             .unwrap()
             .wait();
     }
