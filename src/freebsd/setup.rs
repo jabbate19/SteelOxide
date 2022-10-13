@@ -5,6 +5,23 @@ use std::fs::{self, read_to_string};
 use std::io::{stdin, stdout, Write};
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::Path;
+use rpassword::prompt_password;
+use std::process::ExitStatus;
+
+fn change_password(user: &str, password: &str) -> ExitStatus {
+    let mut proc = exec_cmd("passwd", &[user], true).unwrap();
+    proc.stdin
+        .as_ref()
+        .unwrap()
+        .write_all(password.as_bytes())
+        .unwrap();
+    proc.stdin
+        .as_ref()
+        .unwrap()
+        .write_all(password.as_bytes())
+        .unwrap();
+    proc.wait().unwrap()
+}
 
 fn configure_firewall(config: &mut PfConfig) {
     let default_services: HashMap<String, Vec<String>> = HashMap::from([
@@ -282,11 +299,13 @@ fn check_hashes(version: &str) {
     env::set_current_dir(&current_dir).unwrap();
 }
 
-pub fn audit_users(config: &mut PfConfig) {
+fn audit_users(config: &mut PfConfig) {
+    let password = prompt_password("Enter password for valid users: ").unwrap();
     for user in UserInfo::get_all_users() {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
+                change_password(&user.username, &password);
             } else {
                 user.shutdown();
             }

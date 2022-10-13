@@ -134,12 +134,11 @@ fn get_interface_and_ip() -> Interface {
 }
 
 fn audit_users(config: &mut SysConfig) {
-    let mut users: Vec<String> = Vec::new();
     let password = prompt_password("Enter password for valid users: ").unwrap();
     for user in UserInfo::get_all_users() {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
-                users.push(String::from(&user.username));
+                config.users.push(String::from(&user.username));
                 change_password(&user.username, &password);
             } else {
                 user.shutdown();
@@ -152,12 +151,15 @@ fn audit_users(config: &mut SysConfig) {
             let cron_str = String::from_utf8_lossy(&cron).to_string();
             fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
             if user.uid == 0 {
+                println!("{} has root UID!", user.username);
             } else if user.uid < 1000 {
+                println!("{} has admin UID!", user.username);
             }
-            if user.gid == 0 {}
+            if user.gid == 0 {
+                println!("{} has root GID!", user.username);
+            }
         }
     }
-    config.users = users;
 }
 
 fn select_services(config: &mut SysConfig) {
