@@ -18,6 +18,25 @@ pub struct SysConfig {
     pub users: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Permissions {
+    pub ip: String,
+    pub ports: Vec<String>,
+    pub allow_icmp: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PfConfig {
+    pub lan_ip: IpAddr,
+    pub lan_subnet: String,
+    pub lan_interface: String,
+    pub wan_ip: IpAddr,
+    pub wan_subnet: String,
+    pub wan_interface: String,
+    pub permissions: Vec<Permissions>,
+    pub users: Vec<String>,
+}
+
 pub struct UserInfo {
     pub username: String,
     pub password: String,
@@ -58,6 +77,7 @@ impl UserInfo {
         out
     }
 
+    #[cfg(target_os = "linux")]
     pub fn shutdown(&self) {
         let _ = exec_cmd("usermod", &["-L", &self.username], false)
             .unwrap()
@@ -66,6 +86,23 @@ impl UserInfo {
             .unwrap()
             .wait();
         let _ = exec_cmd("gpasswd", &["--delete", &self.username, "sudo"], false)
+            .unwrap()
+            .wait();
+    }
+
+    #[cfg(target_os = "freebsd")]
+    pub fn shutdown(&self) {
+        let _ = exec_cmd("pw", &["lock", &self.username], false)
+            .unwrap()
+            .wait();
+        let _ = exec_cmd(
+            "pw",
+            &["usermod", "-s", "/bin/false", &self.username],
+            false,
+        )
+        .unwrap()
+        .wait();
+        let _ = exec_cmd("pw", &["wheel", "-d", &self.username], false)
             .unwrap()
             .wait();
     }

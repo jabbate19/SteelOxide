@@ -1,8 +1,7 @@
+use crate::utils::{exec_cmd, yes_no, PIDInfo};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::net::{IpAddr, SocketAddr};
-use crate::utils::{exec_cmd, PIDInfo, yes_no};
-
 
 #[derive(Eq, Hash, PartialEq)]
 struct Socket {
@@ -44,27 +43,27 @@ impl Socket {
         let mut out: Vec<PIDInfo> = Vec::new();
         let index: u64 = 0;
         let proc_data = String::from(&self.process);
-        let pid_locs: Vec<usize> = proc_data.match_indices("pid=").map(|(i, _)|i).collect();
+        let pid_locs: Vec<usize> = proc_data.match_indices("pid=").map(|(i, _)| i).collect();
         for pid_loc in pid_locs {
             let mut iter = proc_data.chars();
-            for _ in 0..pid_loc+4 {
+            for _ in 0..pid_loc + 4 {
                 iter.next();
             }
-            let mut pid_end = pid_loc+4;
+            let mut pid_end = pid_loc + 4;
             loop {
                 match iter.next() {
                     Some(c) => {
                         if !c.is_ascii_digit() {
                             break;
                         }
-                    },
+                    }
                     None => {
                         return out;
-                    },
+                    }
                 }
                 pid_end += 1;
             }
-            out.push(PIDInfo::new(proc_data[pid_loc+4..pid_end].parse().unwrap()).unwrap());
+            out.push(PIDInfo::new(proc_data[pid_loc + 4..pid_end].parse().unwrap()).unwrap());
         }
         out
     }
@@ -72,14 +71,29 @@ impl Socket {
 
 impl Display for Socket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{} | {} | {} | {} | {}:{} | {}:{} | {}", self.net_id, self.state, self.recv_q, self.send_q, self.local_addr, self.local_port, self.peer_addr, self.peer_port, self.process)
+        write!(
+            f,
+            "{} | {} | {} | {} | {}:{} | {}:{} | {}",
+            self.net_id,
+            self.state,
+            self.recv_q,
+            self.send_q,
+            self.local_addr,
+            self.local_port,
+            self.peer_addr,
+            self.peer_port,
+            self.process
+        )
     }
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut safe: HashSet<Socket> = HashSet::new();
     loop {
-        let ss = exec_cmd("ss",&["-tupn0"], false).unwrap().wait_with_output().unwrap();
+        let ss = exec_cmd("ss", &["-tupn0"], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap();
         if ss.status.success() {
             for line in String::from_utf8_lossy(&ss.stdout).split("\n") {
                 let sock = match Socket::new(line.to_string()) {
