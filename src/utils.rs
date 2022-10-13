@@ -63,7 +63,6 @@ impl UserInfo {
 
     pub fn get_all_users() -> Vec<UserInfo> {
         let mut out: Vec<UserInfo> = Vec::new();
-        let file = read_to_string("/etc/passwd");
         if let Ok(lines) = read_lines("/etc/passwd") {
             // Consumes the iterator, returns an (Optional) String
             for line in lines {
@@ -172,7 +171,7 @@ pub fn exec_cmd(cmd: &str, args: &[&str], stdin_req: bool) -> Result<Child, io::
 pub fn yes_no(question: String) -> bool {
     loop {
         print!("{} (y/n)? ", question);
-        stdout().flush();
+        let _ = stdout().flush();
         let mut input = String::new();
         stdin().read_line(&mut input).unwrap();
         match input.to_lowercase().chars().nth(0) {

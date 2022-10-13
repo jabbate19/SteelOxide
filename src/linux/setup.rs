@@ -1,9 +1,10 @@
 use crate::utils::{exec_cmd, yes_no, SysConfig, UserInfo};
 use get_if_addrs::{get_if_addrs, Interface};
+use rpassword::prompt_password;
 use std::{
     fs,
     io::{stdin, stdout, Write},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{IpAddr, Ipv4Addr},
     process::ExitStatus,
 };
 
@@ -28,20 +29,20 @@ fn configure_firewall(config: &mut SysConfig) {
     println!("{} => {}", interface_data.name, interface_data.ip());
     config.interface = String::from(&interface_data.name);
     config.ip = interface_data.ip();
-    exec_cmd("iptables", &["-F"], false).unwrap().wait();
-    exec_cmd("iptables", &["-t", "mangle", "-F"], false)
+    let _ = exec_cmd("iptables", &["-F"], false).unwrap().wait();
+    let _ = exec_cmd("iptables", &["-t", "mangle", "-F"], false)
         .unwrap()
         .wait();
-    exec_cmd("iptables", &["-P", "INPUT", "DROP"], false)
+    let _ = exec_cmd("iptables", &["-P", "INPUT", "DROP"], false)
         .unwrap()
         .wait();
-    exec_cmd("iptables", &["-P", "OUTPUT", "DROP"], false)
+    let _ = exec_cmd("iptables", &["-P", "OUTPUT", "DROP"], false)
         .unwrap()
         .wait();
-    exec_cmd("iptables", &["-P", "FORWARD", "ACCEPT"], false)
+    let _ = exec_cmd("iptables", &["-P", "FORWARD", "ACCEPT"], false)
         .unwrap()
         .wait();
-    exec_cmd(
+    let _ = exec_cmd(
         "iptables",
         &["-A", "INPUT", "-p", "imcp", "-j", "ACCEPT"],
         false,
@@ -50,7 +51,7 @@ fn configure_firewall(config: &mut SysConfig) {
     .wait();
     loop {
         print!("Select port to open: ");
-        stdout().flush();
+        let _ = stdout().flush();
         let mut port_str = String::new();
         stdin().read_line(&mut port_str).unwrap();
         port_str = String::from(port_str.trim());
@@ -60,7 +61,7 @@ fn configure_firewall(config: &mut SysConfig) {
 
         match port_str.parse::<u16>() {
             Ok(port) => {
-                exec_cmd(
+                let _ = exec_cmd(
                     "iptables",
                     &[
                         "-A", "INPUT", "-p", "tcp", "--dport", &port_str, "-j", "ACCEPT",
@@ -69,7 +70,7 @@ fn configure_firewall(config: &mut SysConfig) {
                 )
                 .unwrap()
                 .wait();
-                exec_cmd(
+                let _ = exec_cmd(
                     "iptables",
                     &[
                         "-A", "INPUT", "-p", "udp", "--dport", &port_str, "-j", "ACCEPT",
@@ -78,7 +79,7 @@ fn configure_firewall(config: &mut SysConfig) {
                 )
                 .unwrap()
                 .wait();
-                exec_cmd(
+                let _ = exec_cmd(
                     "iptables",
                     &[
                         "-A", "OUTPUT", "-p", "tcp", "--sport", &port_str, "-j", "ACCEPT",
@@ -87,7 +88,7 @@ fn configure_firewall(config: &mut SysConfig) {
                 )
                 .unwrap()
                 .wait();
-                exec_cmd(
+                let _ = exec_cmd(
                     "iptables",
                     &[
                         "-A", "OUTPUT", "-p", "udp", "--sport", &port_str, "-j", "ACCEPT",
@@ -114,7 +115,7 @@ fn get_interface_and_ip() -> Interface {
     loop {
         println!("{}", &ip_a_str);
         print!("Select internet interface: ");
-        stdout().flush();
+        let _ = stdout().flush();
         let mut interface_name = String::new();
         stdin().read_line(&mut interface_name).unwrap();
         interface_name = interface_name.trim().to_owned();
@@ -134,10 +135,12 @@ fn get_interface_and_ip() -> Interface {
 
 fn audit_users(config: &mut SysConfig) {
     let mut users: Vec<String> = Vec::new();
+    let password = prompt_password("Enter password for valid users: ").unwrap();
     for user in UserInfo::get_all_users() {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 users.push(String::from(&user.username));
+                change_password(&user.username, &password);
             } else {
                 user.shutdown();
             }
@@ -146,6 +149,8 @@ fn audit_users(config: &mut SysConfig) {
                 .wait_with_output()
                 .unwrap()
                 .stdout;
+            let cron_str = String::from_utf8_lossy(&cron).to_string();
+            fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
             if user.uid == 0 {
             } else if user.uid < 1000 {
             }
@@ -159,17 +164,17 @@ fn select_services(config: &mut SysConfig) {
     let mut services: Vec<String> = Vec::new();
     loop {
         print!("Select service to keep alive: ");
-        stdout().flush();
+        let _ = stdout().flush();
         let mut service = String::new();
         stdin().read_line(&mut service).unwrap();
         service = String::from(service.trim().trim_end_matches(".service"));
         if service.len() == 0 {
             break;
         }
-        exec_cmd("systemctl", &["enable", &service], false)
+        let _ = exec_cmd("systemctl", &["enable", &service], false)
             .unwrap()
             .wait();
-        exec_cmd("systemctl", &["start", &service], false)
+        let _ = exec_cmd("systemctl", &["start", &service], false)
             .unwrap()
             .wait();
         services.push(service);
@@ -194,6 +199,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     configure_firewall(&mut config);
     audit_users(&mut config);
     select_services(&mut config);
+    sudo_protection();
+    sshd_protection();
+    scan_file_permissions();
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),

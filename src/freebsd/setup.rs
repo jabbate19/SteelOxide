@@ -1,13 +1,13 @@
-use crate::utils::{exec_cmd, yes_no, PfConfig, Permissions, UserInfo};
-use std::fs::{self, read_to_string, set_permissions};
-use std::env;
-use std::path::Path;
+use crate::utils::{exec_cmd, yes_no, Permissions, PfConfig, UserInfo};
 use std::collections::HashMap;
-use std::io::{stdout, stdin, Write};
-use std::net::{IpAddr,Ipv4Addr};
+use std::env;
+use std::fs::{self, read_to_string};
+use std::io::{stdin, stdout, Write};
+use std::net::{IpAddr, Ipv4Addr};
+use std::path::Path;
 
 fn configure_firewall(config: &mut PfConfig) {
-    let DEFAULT_SERVICES: HashMap<String, Vec<String>> = HashMap::from([
+    let default_services: HashMap<String, Vec<String>> = HashMap::from([
         (
             String::from("AD"),
             Vec::from([
@@ -98,12 +98,12 @@ fn configure_firewall(config: &mut PfConfig) {
                 }
                 Err(_) => {
                     if port.chars().next().unwrap() == '?' {
-                        for (service, ports) in &DEFAULT_SERVICES {
+                        for (service, ports) in &default_services {
                             println!("{} - {:?}", service, ports);
                         }
                         continue;
                     }
-                    match DEFAULT_SERVICES.get(&port) {
+                    match default_services.get(&port) {
                         Some(service_ports) => {
                             for service_port in service_ports {
                                 perm.ports.push(service_port.to_owned());
@@ -166,12 +166,15 @@ fn configure_firewall(config: &mut PfConfig) {
             "pass in quick proto {{ tcp udp }} from {} to {} port {{ 22 }}\n",
             config.lan_subnet, config.lan_ip
         ));
-        output.push_str(&format!("pass out quick proto {{ tcp udp }} from {} port {{ 22 }} to {}\n", config.lan_ip, config.lan_subnet));
+        output.push_str(&format!(
+            "pass out quick proto {{ tcp udp }} from {} port {{ 22 }} to {}\n",
+            config.lan_ip, config.lan_subnet
+        ));
     } else if yes_no("In that case, want me to just kill SSH all together?".to_owned()) {
         exec_cmd("chmod", &["444", "/etc/sshd"], false)
-                .unwrap()
-                .wait()
-                .unwrap();
+            .unwrap()
+            .wait()
+            .unwrap();
         println!("Just make sure to stop it in the pf console");
     }
 
@@ -185,9 +188,9 @@ fn configure_firewall(config: &mut PfConfig) {
         config.lan_ip, config.lan_subnet
     ));
 
-    exec_cmd("cp", &["/etc/pf.conf", "/root/old_pf.conf"], false);
+    let _ = exec_cmd("cp", &["/etc/pf.conf", "/root/old_pf.conf"], false);
     fs::write("/etc/pf.conf", output).unwrap();
-    exec_cmd("pfctl", &["-f", "/etc/pf.conf"], false);
+    let _ = exec_cmd("pfctl", &["-f", "/etc/pf.conf"], false);
 }
 
 fn verify_web_config() {
@@ -253,24 +256,24 @@ fn check_hashes(version: &str) {
     let current_dir = env::current_dir().unwrap();
     env::set_current_dir(&Path::new("/usr/local/www")).unwrap();
     let all_files_stdout = exec_cmd("find", &["."], false)
-    .unwrap()
-    .wait_with_output()
-    .unwrap()
-    .stdout;
+        .unwrap()
+        .wait_with_output()
+        .unwrap()
+        .stdout;
     let all_files = String::from_utf8_lossy(&all_files_stdout);
     for file in all_files.split("\n") {
         match hashes.get(file) {
             Some(known_hash) => {
                 let new_hash_stdout = exec_cmd("sha1sum", &[file], false)
-                .unwrap()
-                .wait_with_output()
-                .unwrap()
-                .stdout;
+                    .unwrap()
+                    .wait_with_output()
+                    .unwrap()
+                    .stdout;
                 let new_hash = String::from_utf8_lossy(&new_hash_stdout);
                 if known_hash != new_hash.split_whitespace().next().unwrap() {
                     println!("Hash for {} does not match key!", file);
                 }
-            },
+            }
             None => {
                 println!("{} does not exist in dictionary!", file);
             }
@@ -292,6 +295,8 @@ pub fn audit_users(config: &mut PfConfig) {
                 .wait_with_output()
                 .unwrap()
                 .stdout;
+            let cron_str = String::from_utf8_lossy(&cron).to_string();
+            fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
             if user.uid == 0 {
                 println!("{} has root UID!", user.username);
             } else if user.uid < 1000 {
@@ -303,8 +308,6 @@ pub fn audit_users(config: &mut PfConfig) {
         }
     }
 }
-
-
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = PfConfig {

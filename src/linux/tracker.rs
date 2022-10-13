@@ -41,7 +41,6 @@ impl Socket {
 
     pub fn analyze_pid(&self) -> Vec<PIDInfo> {
         let mut out: Vec<PIDInfo> = Vec::new();
-        let index: u64 = 0;
         let proc_data = String::from(&self.process);
         let pid_locs: Vec<usize> = proc_data.match_indices("pid=").map(|(i, _)| i).collect();
         for pid_loc in pid_locs {
@@ -114,5 +113,4 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    Ok(())
 }
