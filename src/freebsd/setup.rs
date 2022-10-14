@@ -1,11 +1,11 @@
 use crate::utils::{exec_cmd, yes_no, Permissions, PfConfig, UserInfo};
+use rpassword::prompt_password;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, read_to_string};
 use std::io::{stdin, stdout, Write};
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::Path;
-use rpassword::prompt_password;
 use std::process::ExitStatus;
 
 fn change_password(user: &str, password: &str) -> ExitStatus {

@@ -13,7 +13,7 @@ use std::{
 pub struct SysConfig {
     pub ip: IpAddr,
     pub interface: String,
-    pub ports: Vec<u16>,
+    pub ports: Vec<String>,
     pub services: Vec<String>,
     pub users: Vec<String>,
 }
@@ -117,6 +117,7 @@ pub struct PIDInfo {
 }
 
 impl PIDInfo {
+    #[cfg(target_os = "linux")]
     pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
         let exe = read_link(format!("/proc/{}/exe", pid))?
             .display()
@@ -136,6 +137,58 @@ impl PIDInfo {
             cwd,
             cmdline,
             environ,
+        })
+    }
+
+    #[cfg(target_os = "freebsd")]
+    pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
+        let exe_stdout = exec_cmd("procstat", &["-b", &pid.to_string()[..]], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let exe_full = String::from_utf8_lossy(&exe_stdout);
+        let exe = exe_full.split_whitespace().last().unwrap();
+
+        let cwd_stdout = exec_cmd("procstat", &["pwdx", &pid.to_string()[..]], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let cwd_full = String::from_utf8_lossy(&cwd_stdout);
+        let cwd = cwd_full.split_whitespace().last().unwrap();
+
+        let cmdline_stdout = exec_cmd("procstat", &["pargs", &pid.to_string()[..]], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let cmdline_full = String::from_utf8_lossy(&cmdline_stdout);
+        let mut cmdline: Vec<String> = Vec::new();
+        for line in cmdline_full.split('\n') {
+            cmdline.push(line.split_once(':').unwrap().1.trim().to_owned());
+        }
+        cmdline.remove(0);
+
+        let environ_stdout = exec_cmd("procstat", &["penv", &pid.to_string()[..]], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let environ_full = String::from_utf8_lossy(&environ_stdout);
+        let mut environ: Vec<String> = Vec::new();
+        for line in environ_full.split('\n') {
+            environ.push(line.split_once(':').unwrap().1.trim().to_owned());
+        }
+        environ.remove(0);
+
+        Ok(PIDInfo {
+            pid,
+            exe: exe.to_string(), // -b
+            root: String::from("N/A"),
+            cwd: cwd.to_string(),              // pwdx
+            cmdline: format!("{:?}", cmdline), // pargs
+            environ: format!("{:?}", environ), // penv
         })
     }
 

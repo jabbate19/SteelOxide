@@ -6,6 +6,7 @@ use std::{
     io::{stdin, stdout, Write},
     net::{IpAddr, Ipv4Addr},
     process::ExitStatus,
+    collections::HashMap,
 };
 
 fn change_password(user: &str, password: &str) -> ExitStatus {
@@ -24,11 +25,76 @@ fn change_password(user: &str, password: &str) -> ExitStatus {
 }
 
 fn configure_firewall(config: &mut SysConfig) {
-    let mut ports: Vec<u16> = Vec::new();
+    let default_services: HashMap<String, Vec<String>> = HashMap::from([
+        (
+            String::from("AD"),
+            Vec::from([
+                String::from("389"),
+                String::from("445"),
+                String::from("88"),
+                String::from("135"),
+                String::from("3268"),
+                String::from("123"),
+            ]),
+        ),
+        (String::from("DNS"), Vec::from([String::from("53")])),
+        (
+            String::from("HTTP"),
+            Vec::from([String::from("80"), String::from("443")]),
+        ),
+        (
+            String::from("LDAP"),
+            Vec::from([String::from("389"), String::from("636")]),
+        ),
+        (String::from("NTP"), Vec::from([String::from("123")])),
+        (String::from("SMTP"), Vec::from([String::from("25")])),
+        (String::from("SSH"), Vec::from([String::from("22")])),
+        (
+            String::from("WinRM"),
+            Vec::from([String::from("5985"), String::from("5986")]),
+        ),
+    ]);
     let interface_data = get_interface_and_ip();
     println!("{} => {}", interface_data.name, interface_data.ip());
     config.interface = String::from(&interface_data.name);
     config.ip = interface_data.ip();
+    loop {
+        let mut port = String::new();
+        print!("Enter Port/Common Service to Allow, '?', or nothing to stop: ");
+        let _ = stdout().flush();
+        stdin().read_line(&mut port).unwrap();
+        port = port.trim().to_owned();
+        if port.len() == 0 {
+            break;
+        }
+        match port.parse::<u16>() {
+            Ok(num) => {
+                if num > 0 {
+                    config.ports.push(port);
+                } else {
+                    println!("Invalid Number!");
+                }
+            }
+            Err(_) => {
+                if port.chars().next().unwrap() == '?' {
+                    for (service, ports) in &default_services {
+                        println!("{} - {:?}", service, ports);
+                    }
+                    continue;
+                }
+                match default_services.get(&port) {
+                    Some(service_ports) => {
+                        for service_port in service_ports {
+                            config.ports.push(service_port.to_owned());
+                        }
+                    }
+                    None => {
+                        println!("Service Not Found!");
+                    }
+                }
+            }
+        }
+    }
     let _ = exec_cmd("iptables", &["-F"], false).unwrap().wait();
     let _ = exec_cmd("iptables", &["-t", "mangle", "-F"], false)
         .unwrap()
@@ -49,60 +115,44 @@ fn configure_firewall(config: &mut SysConfig) {
     )
     .unwrap()
     .wait();
-    loop {
-        print!("Select port to open: ");
-        let _ = stdout().flush();
-        let mut port_str = String::new();
-        stdin().read_line(&mut port_str).unwrap();
-        port_str = String::from(port_str.trim());
-        if port_str.len() == 0 {
-            break;
-        }
-
-        match port_str.parse::<u16>() {
-            Ok(port) => {
-                let _ = exec_cmd(
-                    "iptables",
-                    &[
-                        "-A", "INPUT", "-p", "tcp", "--dport", &port_str, "-j", "ACCEPT",
-                    ],
-                    false,
-                )
-                .unwrap()
-                .wait();
-                let _ = exec_cmd(
-                    "iptables",
-                    &[
-                        "-A", "INPUT", "-p", "udp", "--dport", &port_str, "-j", "ACCEPT",
-                    ],
-                    false,
-                )
-                .unwrap()
-                .wait();
-                let _ = exec_cmd(
-                    "iptables",
-                    &[
-                        "-A", "OUTPUT", "-p", "tcp", "--sport", &port_str, "-j", "ACCEPT",
-                    ],
-                    false,
-                )
-                .unwrap()
-                .wait();
-                let _ = exec_cmd(
-                    "iptables",
-                    &[
-                        "-A", "OUTPUT", "-p", "udp", "--sport", &port_str, "-j", "ACCEPT",
-                    ],
-                    false,
-                )
-                .unwrap()
-                .wait();
-                ports.push(port);
-            }
-            Err(_) => continue,
-        }
+    for port in &config.ports {
+        let _ = exec_cmd(
+            "iptables",
+            &[
+                "-A", "INPUT", "-p", "tcp", "--dport", &port, "-j", "ACCEPT",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+        let _ = exec_cmd(
+            "iptables",
+            &[
+                "-A", "INPUT", "-p", "udp", "--dport", &port, "-j", "ACCEPT",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+        let _ = exec_cmd(
+            "iptables",
+            &[
+                "-A", "OUTPUT", "-p", "tcp", "--sport", &port, "-j", "ACCEPT",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+        let _ = exec_cmd(
+            "iptables",
+            &[
+                "-A", "OUTPUT", "-p", "udp", "--sport", &port, "-j", "ACCEPT",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
     }
-    config.ports = ports;
 }
 
 fn get_interface_and_ip() -> Interface {

@@ -102,10 +102,13 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let pids = sock.analyze_pid();
                 if !safe.contains(&sock) {
                     println!("{}", sock);
+                    for pid in &pids {
+                        println!("{}", pid);
+                    }
                     if yes_no("Keep socket".to_string()) {
                         safe.insert(sock);
                     } else {
-                        for pid in pids {
+                        for pid in &pids {
                             pid.terminate()
                         }
                     }
