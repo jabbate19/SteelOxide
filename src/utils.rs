@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::{
     fmt::Display,
     fs::{read_link, read_to_string, File},
@@ -35,6 +35,195 @@ pub struct PfConfig {
     pub wan_interface: String,
     pub permissions: Vec<Permissions>,
     pub users: Vec<String>,
+}
+
+pub struct ADUserInfo {
+    pub name: String,
+    pub display_name: String,
+    pub sam_account_name: String,
+    pub enabled: bool,
+    pub groups: Vec<String>,
+}
+
+impl ADUserInfo {
+    pub fn new(line: String) -> Option<ADUserInfo> {
+        let mut out = ADUserInfo {
+            name: "N/A".to_owned(),
+            display_name: "N/A".to_owned(),
+            sam_account_name: "N/A".to_owned(),
+            enabled: false,
+            groups: Vec::new(),
+        };
+        let mut something = false;
+        let comps: Vec<&str> = line.split("\r\n").collect();
+        for comp in comps {
+            match comp.split_once(':') {
+                Some(key_val) => {
+                    let key = key_val.0.trim();
+                    let val = key_val.1.trim().to_owned();
+                    match key {
+                        "Name" => {
+                            out.name = val;
+                            something = true;
+                        }
+                        "DisplayName" => {
+                            out.display_name = val;
+                            something = true;
+                        }
+                        "SamAccountname" => {
+                            out.sam_account_name = val;
+                            something = true;
+                        }
+                        "Enabled" => {
+                            out.enabled = val == "True";
+                            something = true;
+                        }
+                        "Groups" => {
+                            let groups_str = val.split(',');
+                            let mut groups: Vec<String> = Vec::new();
+                            for group in groups_str {
+                                groups.push(group.to_owned());
+                            }
+                            something = true;
+                        }
+                        _ => {}
+                    }
+                }
+                None => {}
+            }
+        }
+        if something {
+            Some(out)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_all_users() -> Vec<ADUserInfo> {
+        let mut out: Vec<ADUserInfo> = Vec::new();
+        let all_users_out = exec_cmd("powershell", &[
+            "-ExecutionPolicy",
+            "Bypass",
+            "Get-ADUser -Filter * -Properties SamAccountname,Name,DisplayName,Enabled,memberof | % {New-Object PSObject -Property @{Name = $_.Name; DisplayName = $_.DisplayName; SamAccountname= $_.SamAccountname; Enabled = $_.Enabled; Groups = ($_.memberof | Get-ADGroup | Select -ExpandProperty Name) -join ","}} | Select Name, DisplayName, Enabled, SamAccountname, Groups | Format-List"
+        ], false).unwrap().wait_with_output().unwrap().stdout;
+        let all_users_str = String::from_utf8_lossy(&all_users_out);
+        let all_users_split = all_users_str.split("\r\n\r\n");
+        for user in all_users_split {
+            match ADUserInfo::new(user.to_owned()) {
+                Some(ad_user) => {
+                    out.push(ad_user);
+                }
+                None => {}
+            }
+        }
+        out
+    }
+
+    pub fn shutdown(&self) {
+        let _ = exec_cmd("net", &["user", "/domain", &self.name, "/active:no"], false)
+            .unwrap()
+            .wait();
+    }
+
+    pub fn change_password(&self, password: &str) -> ExitStatus {
+        let mut proc = exec_cmd("net", &["user", "/domain", &self.name, password], false).unwrap();
+        proc.wait().unwrap()
+    }
+}
+
+pub struct LocalUserInfo {
+    pub name: String,
+    pub full_name: String,
+    pub enabled: bool,
+    pub groups: Vec<String>,
+}
+
+impl LocalUserInfo {
+    pub fn new(name: String) -> Option<LocalUserInfo> {
+        let mut out = LocalUserInfo {
+            name: "N/A".to_owned(),
+            full_name: "N/A".to_owned(),
+            enabled: false,
+            groups: Vec::new(),
+        };
+        let fields_out = exec_cmd("net", &["user", &name], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let fields_str = String::from_utf8_lossy(&fields_out);
+        let fields_split = fields_str.split("\r\n");
+        for field in fields_split {
+            let (key, val) = match field.split_once("  ") {
+                Some(key_val) => key_val,
+                None => continue,
+            };
+            match key.trim() {
+                "User name" => {
+                    out.name = val.trim().to_owned();
+                }
+                "Full name" => {
+                    out.full_name = val.trim().to_owned();
+                }
+                "Account Active" => {
+                    out.enabled = val.trim() == "Yes";
+                }
+                "Local Group Memberships" => {
+                    let group_strings = val.split('*');
+                    for group in group_strings {
+                        out.groups.push(group.trim().to_owned());
+                    }
+                }
+                "Global Group Memberships" => {
+                    let group_strings = val.split('*');
+                    for group in group_strings {
+                        out.groups.push(group.trim().to_owned());
+                    }
+                }
+                _ => {}
+            }
+        }
+        Some(out)
+    }
+
+    pub fn get_all_users() -> Vec<LocalUserInfo> {
+        let mut out: Vec<LocalUserInfo> = Vec::new();
+        let all_users_out = exec_cmd(
+            "powershell",
+            &[
+                "-ExecutionPolicy",
+                "Bypass",
+                "Get-LocalUser | Select-Object Name",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait_with_output()
+        .unwrap()
+        .stdout;
+        let all_users_str = String::from_utf8_lossy(&all_users_out);
+        let all_users_split = all_users_str.split("\r\n");
+        for user in all_users_split {
+            match LocalUserInfo::new(user.to_owned()) {
+                Some(local_user) => {
+                    out.push(local_user);
+                }
+                None => {}
+            }
+        }
+        out
+    }
+
+    pub fn change_password(&self, password: &str) -> ExitStatus {
+        let mut proc = exec_cmd("net", &["user", &self.name, password], false).unwrap();
+        proc.wait().unwrap()
+    }
+
+    pub fn shutdown(&self) {
+        let _ = exec_cmd("net", &["user", &self.name, "/active:no"], false)
+            .unwrap()
+            .wait();
+    }
 }
 
 pub struct UserInfo {
@@ -104,6 +293,21 @@ impl UserInfo {
         let _ = exec_cmd("pw", &["wheel", "-d", &self.username], false)
             .unwrap()
             .wait();
+    }
+
+    pub fn change_password(&self, password: &str) -> ExitStatus {
+        let mut proc = exec_cmd("passwd", &[&self.username], true).unwrap();
+        proc.stdin
+            .as_ref()
+            .unwrap()
+            .write_all(password.as_bytes())
+            .unwrap();
+        proc.stdin
+            .as_ref()
+            .unwrap()
+            .write_all(password.as_bytes())
+            .unwrap();
+        proc.wait().unwrap()
     }
 }
 

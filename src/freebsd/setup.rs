@@ -1,27 +1,12 @@
 use crate::utils::{exec_cmd, yes_no, Permissions, PfConfig, UserInfo};
 use rpassword::prompt_password;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, read_to_string};
 use std::io::{stdin, stdout, Write};
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::Path;
-use std::process::ExitStatus;
-
-fn change_password(user: &str, password: &str) -> ExitStatus {
-    let mut proc = exec_cmd("passwd", &[user], true).unwrap();
-    proc.stdin
-        .as_ref()
-        .unwrap()
-        .write_all(password.as_bytes())
-        .unwrap();
-    proc.stdin
-        .as_ref()
-        .unwrap()
-        .write_all(password.as_bytes())
-        .unwrap();
-    proc.wait().unwrap()
-}
 
 fn configure_firewall(config: &mut PfConfig) {
     let default_services: HashMap<String, Vec<String>> = HashMap::from([
@@ -211,6 +196,18 @@ fn configure_firewall(config: &mut PfConfig) {
 }
 
 fn verify_web_config() {
+    let versions = [
+        "2_6_0", "2_5_2", "2_5_1", "2_5_0", "2_4_5", "2_4_4", "2_4_3", "2_4_2", "2_4_1", "2_4_0",
+        "2_3_5", "2_3_4", "2_3_3", "2_3_2", "2_3_1", "2_3_0", "2_2", "2_1", "2_0", "1_2",
+    ];
+
+    let hashes = reqwest::blocking::get(
+        "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/pfsense_webconfig.json"
+    )
+    .unwrap()
+    .json::<serde_json::Value>()
+    .unwrap();
+
     loop {
         println!(
             "Version: {}",
@@ -226,53 +223,23 @@ fn verify_web_config() {
                 Err(_) => String::from("Error getting Patch"),
             }
         );
-        println!("==========");
-        println!("All Known Versions:");
-        println!("- 2.6.0");
-        println!("  - Patch 0");
-        println!("- 2.5.2");
-        println!("- 2.5.1");
-        println!("- 2.5.0");
         print!("Provide pfSense Version, or N/A for Other: ");
         let _ = stdout().flush();
         let mut version = String::new();
         stdin().read_line(&mut version).unwrap();
-        match &version[..] {
-            "2.6.0" => {
-                check_hashes("2_6_0");
-                break;
-            }
-            "2.5.2" => {
-                check_hashes("2_5_2");
-                break;
-            }
-            "2.5.1" => {
-                check_hashes("2_5_1");
-                break;
-            }
-            "2.5.0" => {
-                check_hashes("2_5_0");
-                break;
-            }
-            "N/A" => {
-                break;
-            }
-            _ => {}
+        if versions.contains(&&version[..]) {
+            check_hashes_find_files(hashes.get(&version).unwrap());
+            break;
+        } else if version == "N/A" {
+            break;
         }
     }
 }
 
-fn check_hashes(version: &str) {
-    let hashes = reqwest::blocking::get(&format!(
-        "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/{}.json",
-        version
-    ))
-    .unwrap()
-    .json::<serde_json::Value>()
-    .unwrap();
+fn check_hashes_find_files(hashes: &Value) {
     let current_dir = env::current_dir().unwrap();
     env::set_current_dir(&Path::new("/usr/local/www")).unwrap();
-    let all_files_stdout = exec_cmd("find", &["."], false)
+    let all_files_stdout = exec_cmd("find", &[".", "-type", "f"], false)
         .unwrap()
         .wait_with_output()
         .unwrap()
@@ -305,25 +272,25 @@ fn audit_users(config: &mut PfConfig) {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
-                change_password(&user.username, &password);
             } else {
                 user.shutdown();
             }
-            let cron = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
-                .unwrap()
-                .wait_with_output()
-                .unwrap()
-                .stdout;
-            let cron_str = String::from_utf8_lossy(&cron).to_string();
-            fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
-            if user.uid == 0 {
-                println!("{} has root UID!", user.username);
-            } else if user.uid < 1000 {
-                println!("{} has admin UID!", user.username);
-            }
-            if user.gid == 0 {
-                println!("{} has root GID!", user.username);
-            }
+        }
+        user.change_password(&password);
+        let cron = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let cron_str = String::from_utf8_lossy(&cron).to_string();
+        fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
+        if user.uid == 0 {
+            println!("{} has root UID!", user.username);
+        } else if user.uid < 1000 {
+            println!("{} has admin UID!", user.username);
+        }
+        if user.gid == 0 {
+            println!("{} has root GID!", user.username);
         }
     }
 }
