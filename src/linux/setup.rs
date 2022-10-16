@@ -193,7 +193,6 @@ fn audit_users(config: &mut SysConfig) {
 }
 
 fn select_services(config: &mut SysConfig) {
-    let mut services: Vec<String> = Vec::new();
     loop {
         print!("Select service to keep alive: ");
         let _ = stdout().flush();
@@ -205,7 +204,7 @@ fn select_services(config: &mut SysConfig) {
         }
         config.services.push(service);
     }
-    for service in config.services {
+    for service in &config.services {
         let _ = exec_cmd("systemctl", &["enable", &service], false)
             .unwrap()
             .wait();
