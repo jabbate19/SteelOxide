@@ -1,10 +1,10 @@
-use crate::utils::{yes_no, ADUserInfo, LocalUserInfo, SysConfig, exec_cmd};
-use rpassword::prompt_password;
-use std::fs;
-use std::net::{IpAddr, Ipv4Addr};
-use std::io::{stdout, stdin, Write};
-use std::collections::HashMap;
+use crate::utils::{exec_cmd, yes_no, ADUserInfo, LocalUserInfo, SysConfig};
 use get_if_addrs::{get_if_addrs, Interface};
+use rpassword::prompt_password;
+use std::collections::HashMap;
+use std::fs;
+use std::io::{stdin, stdout, Write};
+use std::net::{IpAddr, Ipv4Addr};
 
 fn get_interface_and_ip() -> Interface {
     let ip_a_stdout = exec_cmd("ipconfig", &["/all"], false)
@@ -270,6 +270,60 @@ fn audit_users(config: &mut SysConfig) {
     }
 }
 
+fn select_services(config: &mut SysConfig) {
+    loop {
+        print!("Select service to keep alive: ");
+        let _ = stdout().flush();
+        let mut service = String::new();
+        stdin().read_line(&mut service).unwrap();
+        if service.len() == 0 {
+            break;
+        }
+        config.services.push(service);
+    }
+    for service in &config.services {
+        let _ = exec_cmd(
+            "powershell",
+            &[
+                "-ExecutionPolicy",
+                "Bypass",
+                &format!("Start-Service -Name {}", service),
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+    }
+}
+
+fn scheduled_tasks() {
+    let schtasks_out = exec_cmd("schtasks", &["/query", "/fo", "csv"], false)
+        .unwrap()
+        .wait_with_output()
+        .unwrap()
+        .stdout;
+    let schtasks_str = String::from_utf8_lossy(&schtasks_out);
+    fs::write("schtasks.csv", format!("{}", schtasks_str)).unwrap();
+    let _ = exec_cmd("schtasks", &["/delete", "/tn", "*", "/f"], false)
+        .unwrap()
+        .wait();
+}
+
+fn download_sysinternals() {
+    let _ = exec_cmd(
+        "curl",
+        &[
+            "https://download.sysinternals.com/files/SysinternalsSuite.zip",
+            "-OutFile",
+            "SysintenalsSuite.zip",
+        ],
+        false,
+    )
+    .unwrap()
+    .wait();
+    println!("SysinternalsSuite.zip has been put in your current directory!");
+}
+
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = SysConfig {
         ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -280,6 +334,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     configure_firewall(&mut config);
     audit_users(&mut config);
+    select_services(&mut config);
+    scheduled_tasks();
+    download_sysinternals();
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),
