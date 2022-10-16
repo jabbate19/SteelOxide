@@ -396,8 +396,47 @@ impl PIDInfo {
         })
     }
 
+    #[cfg(target_os = "windows")]
+    pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
+        let mut out = PIDInfo {
+            pid,
+            exe: String::from("N/A"),
+            root: String::from("N/A"),
+            cwd: String::from("N/A"),
+            cmdline: String::from("N/A"),
+            environ: String::from("N/A"),
+        };
+        let exe_stdout = exec_cmd("powershell", &["-ExecutionPolicy", "Bypass", &format!("Get-WmiObject Win32_Process -Filter \"ProcessId = {}\" | Select-Object ExecutablePath, CommandLine | Format-List", pid)], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let exe = String::from_utf8_lossy(&exe_stdout);
+
+        let comps: Vec<&str> = exe.split("\r\n").collect();
+        for comp in comps {
+            match comp.split_once(':') {
+                Some(key_val) => {
+                    let key = key_val.0.trim();
+                    let val = key_val.1.trim().to_owned();
+                    match key {
+                        "ExecutablePath" => {
+                            out.exe = val;
+                        }
+                        "CommandLine" => {
+                            out.cmdline = val;
+                        }
+                        _ => {}
+                    }
+                }
+                None => {}
+            }
+        }
+        Ok(out)
+    }
+
     pub fn terminate(&self) {
-        let _ = exec_cmd("kill", &["-9", &self.pid.to_string()], false)
+        let _ = exec_cmd("taskkill", &["/PID", &self.pid.to_string(), "/F"], false)
             .unwrap()
             .wait();
     }
