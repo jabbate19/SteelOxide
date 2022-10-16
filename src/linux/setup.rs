@@ -203,15 +203,16 @@ fn select_services(config: &mut SysConfig) {
         if service.len() == 0 {
             break;
         }
+        config.services.push(service);
+    }
+    for service in config.services {
         let _ = exec_cmd("systemctl", &["enable", &service], false)
             .unwrap()
             .wait();
         let _ = exec_cmd("systemctl", &["start", &service], false)
             .unwrap()
             .wait();
-        services.push(service);
     }
-    config.services = services;
 }
 
 fn sudo_protection() {}
