@@ -1,7 +1,225 @@
-use crate::utils::{yes_no, ADUserInfo, LocalUserInfo, SysConfig};
+use crate::utils::{yes_no, ADUserInfo, LocalUserInfo, SysConfig, exec_cmd};
 use rpassword::prompt_password;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr};
+use std::io::{stdout, stdin, Write};
+use std::collections::HashMap;
+use get_if_addrs::{get_if_addrs, Interface};
+
+fn get_interface_and_ip() -> Interface {
+    let ip_a_stdout = exec_cmd("ipconfig", &["/all"], false)
+        .unwrap()
+        .wait_with_output()
+        .unwrap()
+        .stdout;
+    let ip_a_str = String::from_utf8_lossy(&ip_a_stdout);
+    loop {
+        println!("{}", &ip_a_str);
+        print!("Select internet interface: ");
+        let _ = stdout().flush();
+        let mut interface_name = String::new();
+        stdin().read_line(&mut interface_name).unwrap();
+        interface_name = interface_name.trim().to_owned();
+        match get_if_addrs()
+            .unwrap()
+            .into_iter()
+            .filter(|int| int.name.eq(&interface_name))
+            .next()
+        {
+            Some(ip) => {
+                return ip;
+            }
+            _ => continue,
+        }
+    }
+}
+
+fn configure_firewall(config: &mut SysConfig) {
+    let default_services: HashMap<String, Vec<String>> = HashMap::from([
+        (
+            String::from("AD"),
+            Vec::from([
+                String::from("389"),
+                String::from("445"),
+                String::from("88"),
+                String::from("135"),
+                String::from("3268"),
+                String::from("123"),
+            ]),
+        ),
+        (String::from("DNS"), Vec::from([String::from("53")])),
+        (
+            String::from("HTTP"),
+            Vec::from([String::from("80"), String::from("443")]),
+        ),
+        (
+            String::from("LDAP"),
+            Vec::from([String::from("389"), String::from("636")]),
+        ),
+        (String::from("NTP"), Vec::from([String::from("123")])),
+        (String::from("SMTP"), Vec::from([String::from("25")])),
+        (String::from("SSH"), Vec::from([String::from("22")])),
+        (
+            String::from("WinRM"),
+            Vec::from([String::from("5985"), String::from("5986")]),
+        ),
+    ]);
+    let interface_data = get_interface_and_ip();
+    println!("{} => {}", interface_data.name, interface_data.ip());
+    config.interface = String::from(&interface_data.name);
+    config.ip = interface_data.ip();
+    loop {
+        let mut port = String::new();
+        print!("Enter Port/Common Service to Allow, '?', or nothing to stop: ");
+        let _ = stdout().flush();
+        stdin().read_line(&mut port).unwrap();
+        port = port.trim().to_owned();
+        if port.len() == 0 {
+            break;
+        }
+        match port.parse::<u16>() {
+            Ok(num) => {
+                if num > 0 {
+                    config.ports.push(port);
+                } else {
+                    println!("Invalid Number!");
+                }
+            }
+            Err(_) => {
+                if port.chars().next().unwrap() == '?' {
+                    for (service, ports) in &default_services {
+                        println!("{} - {:?}", service, ports);
+                    }
+                    continue;
+                }
+                match default_services.get(&port) {
+                    Some(service_ports) => {
+                        for service_port in service_ports {
+                            config.ports.push(service_port.to_owned());
+                        }
+                    }
+                    None => {
+                        println!("Service Not Found!");
+                    }
+                }
+            }
+        }
+    }
+    let _ = exec_cmd("netsh", &["advfirewall", "reset"], false)
+        .unwrap()
+        .wait();
+    let _ = exec_cmd(
+        "netsh",
+        &["advfirewall", "set", "allprofiles", "state", "on"],
+        false,
+    )
+    .unwrap()
+    .wait();
+    let _ = exec_cmd(
+        "netsh",
+        &["advfirewall", "firewall", "delete", "rule", "name=all"],
+        false,
+    )
+    .unwrap()
+    .wait();
+    let _ = exec_cmd(
+        "netsh",
+        &[
+            "advfirewall",
+            "set",
+            "firewallpolicy",
+            "blockinbound,blockoutbound",
+        ],
+        false,
+    )
+    .unwrap()
+    .wait();
+    let _ = exec_cmd(
+        "netsh",
+        &[
+            "advfirewall",
+            "firewall",
+            "add",
+            "rule",
+            "name=\"ICMP\"",
+            "action=allow",
+            "protocol=icmpv4:8,any",
+        ],
+        false,
+    )
+    .unwrap()
+    .wait();
+    for port in &config.ports {
+        let _ = exec_cmd(
+            "netsh",
+            &[
+                "advfirewall",
+                "firewall",
+                "add",
+                "rule",
+                &format!("name={}", port),
+                "action=allow",
+                "protocol=tcp",
+                &format!("remoteport={}", port),
+                "dir=in",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+        let _ = exec_cmd(
+            "netsh",
+            &[
+                "advfirewall",
+                "firewall",
+                "add",
+                "rule",
+                &format!("name={}", port),
+                "action=allow",
+                "protocol=tcp",
+                &format!("localport={}", port),
+                "dir=out",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+        let _ = exec_cmd(
+            "netsh",
+            &[
+                "advfirewall",
+                "firewall",
+                "add",
+                "rule",
+                &format!("name={}", port),
+                "action=allow",
+                "protocol=udp",
+                &format!("remoteport={}", port),
+                "dir=in",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+        let _ = exec_cmd(
+            "netsh",
+            &[
+                "advfirewall",
+                "firewall",
+                "add",
+                "rule",
+                &format!("name={}", port),
+                "action=allow",
+                "protocol=udp",
+                &format!("localport={}", port),
+                "dir=out",
+            ],
+            false,
+        )
+        .unwrap()
+        .wait();
+    }
+}
 
 fn audit_users(config: &mut SysConfig) {
     let password = prompt_password("Enter password for valid users: ").unwrap();
@@ -60,6 +278,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         services: Vec::new(),
         users: Vec::new(),
     };
+    configure_firewall(&mut config);
     audit_users(&mut config);
     fs::write(
         "config.json",
