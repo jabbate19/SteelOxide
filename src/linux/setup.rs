@@ -2,27 +2,11 @@ use crate::utils::{exec_cmd, yes_no, SysConfig, UserInfo};
 use get_if_addrs::{get_if_addrs, Interface};
 use rpassword::prompt_password;
 use std::{
+    collections::HashMap,
     fs,
     io::{stdin, stdout, Write},
     net::{IpAddr, Ipv4Addr},
-    process::ExitStatus,
-    collections::HashMap,
 };
-
-fn change_password(user: &str, password: &str) -> ExitStatus {
-    let mut proc = exec_cmd("passwd", &[user], true).unwrap();
-    proc.stdin
-        .as_ref()
-        .unwrap()
-        .write_all(password.as_bytes())
-        .unwrap();
-    proc.stdin
-        .as_ref()
-        .unwrap()
-        .write_all(password.as_bytes())
-        .unwrap();
-    proc.wait().unwrap()
-}
 
 fn configure_firewall(config: &mut SysConfig) {
     let default_services: HashMap<String, Vec<String>> = HashMap::from([
@@ -118,18 +102,14 @@ fn configure_firewall(config: &mut SysConfig) {
     for port in &config.ports {
         let _ = exec_cmd(
             "iptables",
-            &[
-                "-A", "INPUT", "-p", "tcp", "--dport", &port, "-j", "ACCEPT",
-            ],
+            &["-A", "INPUT", "-p", "tcp", "--dport", &port, "-j", "ACCEPT"],
             false,
         )
         .unwrap()
         .wait();
         let _ = exec_cmd(
             "iptables",
-            &[
-                "-A", "INPUT", "-p", "udp", "--dport", &port, "-j", "ACCEPT",
-            ],
+            &["-A", "INPUT", "-p", "udp", "--dport", &port, "-j", "ACCEPT"],
             false,
         )
         .unwrap()
@@ -189,25 +169,25 @@ fn audit_users(config: &mut SysConfig) {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
-                change_password(&user.username, &password);
             } else {
                 user.shutdown();
             }
-            let cron = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
-                .unwrap()
-                .wait_with_output()
-                .unwrap()
-                .stdout;
-            let cron_str = String::from_utf8_lossy(&cron).to_string();
-            fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
-            if user.uid == 0 {
-                println!("{} has root UID!", user.username);
-            } else if user.uid < 1000 {
-                println!("{} has admin UID!", user.username);
-            }
-            if user.gid == 0 {
-                println!("{} has root GID!", user.username);
-            }
+        }
+        user.change_password(&password);
+        let cron = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap()
+            .stdout;
+        let cron_str = String::from_utf8_lossy(&cron).to_string();
+        fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
+        if user.uid == 0 {
+            println!("{} has root UID!", user.username);
+        } else if user.uid < 1000 {
+            println!("{} has admin UID!", user.username);
+        }
+        if user.gid == 0 {
+            println!("{} has root GID!", user.username);
         }
     }
 }
