@@ -355,8 +355,9 @@ fn check_hashes_check_files(dir: &Path, hashes: &Value) {
 }
 
 fn audit_users(config: &mut PfConfig) {
-    let password = prompt_password("Enter password for valid users: ").unwrap();
+    let password = prompt_password("Enter password for users: ").unwrap();
     for user in UserInfo::get_all_users() {
+        println!("{:?}", user);
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));

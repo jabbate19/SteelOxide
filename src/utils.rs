@@ -254,6 +254,7 @@ impl LocalUserInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct UserInfo {
     pub username: String,
     pub password: String,

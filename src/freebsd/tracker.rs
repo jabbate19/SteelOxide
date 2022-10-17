@@ -52,7 +52,7 @@ impl Display for Socket {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    create_dir("./quarantine");
+    create_dir("./quarantine")?;
     let mut safe: HashSet<Socket> = HashSet::new();
     loop {
         let ss = exec_cmd("sockstat", &[], false)

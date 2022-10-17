@@ -316,7 +316,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         users: Vec::new(),
     };
     configure_firewall(&mut config);
-    let password = prompt_password("Enter password for valid users: ").unwrap();
+    let password = prompt_password("Enter password for users: ").unwrap();
     audit_local_users(&mut config, password);
     if yes_no("Check AD Users (Must be on AD Server)".to_owned()) {
         audit_ad_users(&mut config, password);
