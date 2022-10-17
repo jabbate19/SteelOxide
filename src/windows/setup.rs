@@ -73,26 +73,41 @@ fn configure_firewall(config: &mut SysConfig) {
         }
     }
     debug!("Resetting Firewall and deleting old rules");
-    let _ = exec_cmd("netsh", &["advfirewall", "reset"], false)
+    if !exec_cmd("netsh", &["advfirewall", "reset"], false)
         .unwrap()
-        .wait();
-    let _ = exec_cmd(
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to reset firewall!");
+    };
+    if !exec_cmd(
         "netsh",
         &["advfirewall", "set", "allprofiles", "state", "on"],
         false,
     )
     .unwrap()
-    .wait();
-    let _ = exec_cmd(
+    .wait()
+    .unwrap()
+    .success()
+    {
+        error!("Failed to turn on firewalls!");
+    };
+    if !exec_cmd(
         "netsh",
         &["advfirewall", "firewall", "delete", "rule", "name=all"],
         false,
     )
     .unwrap()
-    .wait();
+    .wait()
+    .unwrap()
+    .success()
+    {
+        error!("Failed to delete old firewall rules!");
+    };
     info!("Firewall has been wiped");
     debug!("Adding New Rules");
-    let _ = exec_cmd(
+    if !exec_cmd(
         "netsh",
         &[
             "advfirewall",
@@ -103,8 +118,13 @@ fn configure_firewall(config: &mut SysConfig) {
         false,
     )
     .unwrap()
-    .wait();
-    let _ = exec_cmd(
+    .wait()
+    .unwrap()
+    .success()
+    {
+        error!("Failed to block firewall in/out!");
+    };
+    if !exec_cmd(
         "netsh",
         &[
             "advfirewall",
@@ -118,10 +138,15 @@ fn configure_firewall(config: &mut SysConfig) {
         false,
     )
     .unwrap()
-    .wait();
+    .wait()
+    .unwrap()
+    .success()
+    {
+        error!("Failed to allow ICMP!");
+    };
     info!("Added ICMP Rule");
     for port in &config.ports {
-        let _ = exec_cmd(
+        if !exec_cmd(
             "netsh",
             &[
                 "advfirewall",
@@ -137,8 +162,13 @@ fn configure_firewall(config: &mut SysConfig) {
             false,
         )
         .unwrap()
-        .wait();
-        let _ = exec_cmd(
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to add allow in tcp port {}!", port);
+        };
+        if !exec_cmd(
             "netsh",
             &[
                 "advfirewall",
@@ -154,8 +184,13 @@ fn configure_firewall(config: &mut SysConfig) {
             false,
         )
         .unwrap()
-        .wait();
-        let _ = exec_cmd(
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to add allow out tcp port {}!", port);
+        };
+        if !exec_cmd(
             "netsh",
             &[
                 "advfirewall",
@@ -171,8 +206,13 @@ fn configure_firewall(config: &mut SysConfig) {
             false,
         )
         .unwrap()
-        .wait();
-        let _ = exec_cmd(
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to add allow in udp port {}!", port);
+        };
+        if !exec_cmd(
             "netsh",
             &[
                 "advfirewall",
@@ -188,12 +228,17 @@ fn configure_firewall(config: &mut SysConfig) {
             false,
         )
         .unwrap()
-        .wait();
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to add allow out udp port {}!", port);
+        };
         info!("Add Port {} Rule", port);
     }
 }
 
-fn audit_local_users(config: &mut SysConfig, password: String) {
+fn audit_local_users(config: &mut SysConfig, password: &String) {
     for user in LocalUserInfo::get_all_users() {
         println!("{:?}", user);
         if user.groups.contains(&"Domain Admins".to_owned()) {
@@ -221,7 +266,7 @@ fn audit_local_users(config: &mut SysConfig, password: String) {
     }
 }
 
-fn audit_ad_users(config: &mut SysConfig, password: String) {
+fn audit_ad_users(config: &mut SysConfig, password: &String) {
     for user in ADUserInfo::get_all_users() {
         println!("{:?}", user);
         if user.groups.contains(&"Domain Admins".to_owned()) {
@@ -262,7 +307,7 @@ fn select_services(config: &mut SysConfig) {
         config.services.push(service);
     }
     for service in &config.services {
-        let _ = exec_cmd(
+        if !exec_cmd(
             "powershell",
             &[
                 "-ExecutionPolicy",
@@ -272,28 +317,46 @@ fn select_services(config: &mut SysConfig) {
             false,
         )
         .unwrap()
-        .wait();
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to start service {}", service);
+            continue;
+        };
         info!("Service {} will be maintained and kept alive", service);
     }
 }
 
 fn scheduled_tasks() {
-    let schtasks_out = exec_cmd("schtasks", &["/query", "/fo", "csv"], false)
+    let schtasks_cmd = exec_cmd("schtasks", &["/query", "/fo", "csv"], false)
         .unwrap()
         .wait_with_output()
-        .unwrap()
-        .stdout;
+        .unwrap();
+    let schtasks_out = match schtasks_cmd.status.success() {
+        true => schtasks_cmd.stdout,
+        false => {
+            error!("Failed to get scheduled tasks!");
+            return;
+        }
+    };
     let schtasks_str = String::from_utf8_lossy(&schtasks_out);
     fs::write("schtasks.csv", format!("{}", schtasks_str)).unwrap();
-    let _ = exec_cmd("schtasks", &["/delete", "/tn", "*", "/f"], false)
+    if !exec_cmd("schtasks", &["/delete", "/tn", "*", "/f"], false)
         .unwrap()
-        .wait();
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to delete all tasks!");
+        return;
+    };
     info!("Scheduled Tasks have been stored in schtasks.csv and have been deleted");
 }
 
 fn download_sysinternals() {
     debug!("Downloading sysinternals...");
-    let _ = exec_cmd(
+    if !exec_cmd(
         "curl",
         &[
             "https://download.sysinternals.com/files/SysinternalsSuite.zip",
@@ -303,7 +366,13 @@ fn download_sysinternals() {
         false,
     )
     .unwrap()
-    .wait();
+    .wait()
+    .unwrap()
+    .success()
+    {
+        error!("Failed to download sysinternals!");
+        return;
+    };
     info!("SysinternalsSuite.zip has been put in your current directory!");
 }
 
@@ -317,9 +386,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     configure_firewall(&mut config);
     let password = prompt_password("Enter password for users: ").unwrap();
-    audit_local_users(&mut config, password);
+    audit_local_users(&mut config, &password);
     if yes_no("Check AD Users (Must be on AD Server)".to_owned()) {
-        audit_ad_users(&mut config, password);
+        audit_ad_users(&mut config, &password);
     }
     select_services(&mut config);
     scheduled_tasks();

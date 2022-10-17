@@ -1,55 +1,100 @@
 use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, SysConfig, UserInfo};
 use log::{debug, error, info, warn};
 use rpassword::prompt_password;
+use std::fs::File;
+use std::io::BufReader;
 use std::{
     collections::HashMap,
     fs,
     io::{stdin, stdout, Write},
     net::{IpAddr, Ipv4Addr},
 };
-use std::io::BufReader;
-use std::fs::File;
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");
-    let _ = exec_cmd("iptables", &["-F"], false).unwrap().wait();
-    let _ = exec_cmd("iptables", &["-t", "mangle", "-F"], false)
+    if !exec_cmd("iptables", &["-F"], false)
         .unwrap()
-        .wait();
-    let _ = exec_cmd("iptables", &["-P", "INPUT", "DROP"], false)
+        .wait()
         .unwrap()
-        .wait();
-    let _ = exec_cmd("iptables", &["-P", "OUTPUT", "DROP"], false)
+        .success()
+    {
+        error!("Failed to flush iptables");
+    };
+    if !exec_cmd("iptables", &["-t", "mangle", "-F"], false)
         .unwrap()
-        .wait();
-    let _ = exec_cmd("iptables", &["-P", "FORWARD", "ACCEPT"], false)
+        .wait()
         .unwrap()
-        .wait();
+        .success()
+    {
+        error!("Failed to flush iptables mangle table");
+    };
+    if !exec_cmd("iptables", &["-P", "INPUT", "DROP"], false)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to set default iptables input to drop");
+    };
+    if !exec_cmd("iptables", &["-P", "OUTPUT", "DROP"], false)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to set default iptables output to drop");
+    };
+    if !exec_cmd("iptables", &["-P", "FORWARD", "ACCEPT"], false)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to set default iptables forward to accept");
+    };
     info!("Firewall has been wiped");
-    let _ = exec_cmd(
+    if exec_cmd(
         "iptables",
         &["-A", "INPUT", "-p", "imcp", "-j", "ACCEPT"],
         false,
     )
     .unwrap()
-    .wait();
-    info!("Added ICMP Rule");
+    .wait()
+    .unwrap()
+    .success()
+    {
+        info!("Added ICMP Rule");
+    } else {
+        error!("Failed to add ICMP INPUT ACCEPT rule");
+    }
     for port in &config.ports {
-        let _ = exec_cmd(
+        if !exec_cmd(
             "iptables",
             &["-A", "INPUT", "-p", "tcp", "--dport", &port, "-j", "ACCEPT"],
             false,
         )
         .unwrap()
-        .wait();
-        let _ = exec_cmd(
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to set INPUT ACCEPT TCP PORT {} rule", port);
+            continue;
+        }
+        if !exec_cmd(
             "iptables",
             &["-A", "INPUT", "-p", "udp", "--dport", &port, "-j", "ACCEPT"],
             false,
         )
         .unwrap()
-        .wait();
-        let _ = exec_cmd(
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to set INPUT ACCEPT UDP PORT {} rule", port);
+            continue;
+        }
+        if !exec_cmd(
             "iptables",
             &[
                 "-A", "OUTPUT", "-p", "tcp", "--sport", &port, "-j", "ACCEPT",
@@ -57,8 +102,14 @@ fn configure_firewall(config: &SysConfig) {
             false,
         )
         .unwrap()
-        .wait();
-        let _ = exec_cmd(
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to set OUTPUT ACCEPT TCP PORT {} rule", port);
+            continue;
+        }
+        if !exec_cmd(
             "iptables",
             &[
                 "-A", "OUTPUT", "-p", "udp", "--sport", &port, "-j", "ACCEPT",
@@ -66,7 +117,13 @@ fn configure_firewall(config: &SysConfig) {
             false,
         )
         .unwrap()
-        .wait();
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to set OUTPUT ACCEPT UDP PORT {} rule", port);
+            continue;
+        }
         info!("Add Port {} Rule", port);
     }
 }
@@ -83,7 +140,9 @@ fn audit_users(config: &SysConfig) {
         if user.gid == 0 {
             warn!("{} has root GID!", user.username);
         }
-        if !(["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) || config.users.contains(&user.username)) {
+        if !(["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..])
+            || config.users.contains(&user.username))
+        {
             user.shutdown();
             warn!("Local User {} was found active and disabled", user.username);
         }
@@ -95,18 +154,29 @@ fn audit_users(config: &SysConfig) {
         //     .stdout;
         // let cron_str = String::from_utf8_lossy(&cron).to_string();
         // fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
-        
     }
 }
 
 fn select_services(config: &SysConfig) {
     for service in &config.services {
-        let _ = exec_cmd("systemctl", &["enable", &service], false)
+        if !exec_cmd("systemctl", &["enable", &service], false)
             .unwrap()
-            .wait();
-        let _ = exec_cmd("systemctl", &["start", &service], false)
+            .wait()
             .unwrap()
-            .wait();
+            .success()
+        {
+            error!("Failed to enable {}", service);
+            continue;
+        }
+        if !exec_cmd("systemctl", &["start", &service], false)
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to start {}", service);
+            continue;
+        }
         info!("Service {} will be maintained and kept alive", service);
     }
 }

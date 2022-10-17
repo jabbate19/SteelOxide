@@ -2,7 +2,7 @@ use crate::utils::{exec_cmd, yes_no, PIDInfo};
 use log::{error, info, warn};
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::fs:create_dir;
+use std::fs::create_dir;
 
 #[derive(Eq, Hash, PartialEq)]
 struct Socket {

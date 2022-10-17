@@ -1,4 +1,5 @@
 use get_if_addrs::{get_if_addrs, Interface};
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::process::{Command, ExitStatus, Stdio};
 use std::{
@@ -112,6 +113,10 @@ impl ADUserInfo {
             "Bypass",
             "Get-ADUser -Filter * -Properties SamAccountname,Name,DisplayName,Enabled,memberof | % {New-Object PSObject -Property @{Name = $_.Name; DisplayName = $_.DisplayName; SamAccountname= $_.SamAccountname; Enabled = $_.Enabled; Groups = ($_.memberof | Get-ADGroup | Select -ExpandProperty Name) -join \",\"}} | Select Name, DisplayName, Enabled, SamAccountname, Groups | Format-List"
         ], false).unwrap().wait_with_output().unwrap();
+        if !all_users_cmd.status.success() {
+            error!("Failed to get AD Users!");
+            return out;
+        }
         let all_users_str = String::from_utf8_lossy(&all_users_cmd.stdout);
         let all_users_split = all_users_str.split("\r\n\r\n");
         for user in all_users_split {
@@ -126,14 +131,24 @@ impl ADUserInfo {
     }
 
     pub fn shutdown(&self) {
-        let _ = exec_cmd("net", &["user", "/domain", &self.name, "/active:no"], false)
+        if exec_cmd("net", &["user", "/domain", &self.name, "/active:no"], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to disable domain user {}", &self.name);
+        };
     }
 
-    pub fn change_password(&self, password: &str) -> ExitStatus {
-        let mut proc = exec_cmd("net", &["user", "/domain", &self.name, password], false).unwrap();
-        proc.wait().unwrap()
+    pub fn change_password(&self, password: &str) {
+        if !exec_cmd("net", &["user", "/domain", &self.name, password], false)
+            .unwrap()
+            .wait()
+            .unwrap().success()
+        {
+            error!("Failed to change domain user {} password!", &self.name);
+        }
     }
 }
 
@@ -153,11 +168,17 @@ impl LocalUserInfo {
             enabled: false,
             groups: Vec::new(),
         };
-        let fields_out = exec_cmd("net", &["user", &name], false)
+        let fields_cmd = exec_cmd("net", &["user", &name], false)
             .unwrap()
             .wait_with_output()
-            .unwrap()
-            .stdout;
+            .unwrap();
+        let fields_out = match fields_cmd.status.success() {
+            true => fields_cmd.stdout,
+            false => {
+                error!("Failed to get local user info for {}", name);
+                return None;
+            }
+        };
         let fields_str = String::from_utf8_lossy(&fields_out);
         let fields_split = fields_str.split("\r\n");
         let mut something = false;
@@ -216,7 +237,7 @@ impl LocalUserInfo {
 
     pub fn get_all_users() -> Vec<LocalUserInfo> {
         let mut out: Vec<LocalUserInfo> = Vec::new();
-        let all_users_out = exec_cmd(
+        let all_users_cmd = exec_cmd(
             "powershell",
             &[
                 "-ExecutionPolicy",
@@ -227,8 +248,14 @@ impl LocalUserInfo {
         )
         .unwrap()
         .wait_with_output()
-        .unwrap()
-        .stdout;
+        .unwrap();
+        let all_users_out = match all_users_cmd.status.success() {
+            true => all_users_cmd.stdout,
+            false => {
+                error!("Failed to get local users!");
+                return out;
+            }
+        };
         let all_users_str = String::from_utf8_lossy(&all_users_out);
         let all_users_split = all_users_str.split("\r\n");
         for user in all_users_split {
@@ -242,15 +269,26 @@ impl LocalUserInfo {
         out
     }
 
-    pub fn change_password(&self, password: &str) -> ExitStatus {
-        let mut proc = exec_cmd("net", &["user", &self.name, password], false).unwrap();
-        proc.wait().unwrap()
+    pub fn change_password(&self, password: &str) {
+        if !exec_cmd("net", &["user", &self.name, password], false)
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to reset local user {} password", &self.name);
+        }
     }
 
     pub fn shutdown(&self) {
-        let _ = exec_cmd("net", &["user", &self.name, "/active:no"], false)
+        if !exec_cmd("net", &["user", &self.name, "/active:no"], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to disable local user {}", &self.name);
+        }
     }
 }
 
@@ -296,35 +334,73 @@ impl UserInfo {
 
     #[cfg(target_os = "linux")]
     pub fn shutdown(&self) {
-        let _ = exec_cmd("usermod", &["-L", &self.username], false)
+        if !exec_cmd("usermod", &["-L", &self.username], false)
             .unwrap()
-            .wait();
-        let _ = exec_cmd("usermod", &["-s", "/bin/false", &self.username], false)
+            .wait()
             .unwrap()
-            .wait();
-        let _ = exec_cmd("gpasswd", &["--delete", &self.username, "sudo"], false)
+            .success()
+        {
+            error!("Failed to lock user {} password", &self.username);
+        };
+        if !exec_cmd("usermod", &["-s", "/bin/false", &self.username], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to lock user {} shell", &self.username);
+        }
+        if !exec_cmd("gpasswd", &["--delete", &self.username, "sudo"], false)
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to remove sudo from user {}", &self.username);
+        }
+        if !exec_cmd("gpasswd", &["--delete", &self.username, "wheel"], false)
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to remove wheel from user {}", &self.username);
+        }
     }
 
     #[cfg(target_os = "freebsd")]
     pub fn shutdown(&self) {
-        let _ = exec_cmd("pw", &["lock", &self.username], false)
+        if !exec_cmd("pw", &["lock", &self.username], false)
             .unwrap()
-            .wait();
-        let _ = exec_cmd(
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to lock user {} password", &self.username);
+        }
+        if !exec_cmd(
             "pw",
             &["usermod", "-s", "/bin/false", &self.username],
             false,
         )
         .unwrap()
-        .wait();
-        let _ = exec_cmd("pw", &["wheel", "-d", &self.username], false)
+        .wait()
+        .unwrap()
+        .success()
+        {
+            error!("Failed to lock user {} shell", &self.username);
+        }
+        if !exec_cmd("pw", &["wheel", "-d", &self.username], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to remove wheel from user {}", &self.username);
+        }
     }
 
-    pub fn change_password(&self, password: &str) -> ExitStatus {
+    pub fn change_password(&self, password: &str) {
         let mut proc = exec_cmd("passwd", &[&self.username], true).unwrap();
         proc.stdin
             .as_ref()
@@ -336,7 +412,9 @@ impl UserInfo {
             .unwrap()
             .write_all(password.as_bytes())
             .unwrap();
-        proc.wait().unwrap()
+        if !proc.wait().unwrap().success() {
+            error!("Failed to reset user {} password", &self.username);
+        }
     }
 }
 
@@ -374,45 +452,78 @@ impl PIDInfo {
     }
 
     pub fn terminate(&self) {
-        let _ = exec_cmd("kill", &["-9", &self.pid.to_string()], false)
+        if !exec_cmd("kill", &["-9", &self.pid.to_string()], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to terminate PID {}", &self.pid);
+        }
     }
 
     pub fn quarantine(&self) {
-        let _ = exec_cmd("mv", &[&self.exe, "./quarantine"], false)
+        if !exec_cmd("mv", &[&self.exe, "./quarantine"], false)
             .unwrap()
-            .wait();
-        let _ = exec_cmd("chmod", &["444", &self.exe], false)
+            .wait()
             .unwrap()
-            .wait();
+            .success()
+        {
+            error!("Failed to move exe {}", &self.exe);
+        }
+        if !exec_cmd("chmod", &["444", &self.exe], false)
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to chmod exe {}", &self.exe);
+        }
     }
 }
 
 #[cfg(target_os = "freebsd")]
 impl PIDInfo {
-    pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
-        let exe_stdout = exec_cmd("procstat", &["-b", &pid.to_string()[..]], false)
+    pub fn new(pid: u64) -> Option<PIDInfo> {
+        let exe_cmd = exec_cmd("procstat", &["-b", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
-            .unwrap()
-            .stdout;
+            .unwrap();
+        let exe_stdout = match exe_cmd.status.success() {
+            true => exe_cmd.stdout,
+            false => {
+                error!("Failed to get exe for PID {}", pid);
+                return None;
+            }
+        };
         let exe_full = String::from_utf8_lossy(&exe_stdout);
         let exe = exe_full.split_whitespace().last().unwrap();
 
-        let cwd_stdout = exec_cmd("procstat", &["pwdx", &pid.to_string()[..]], false)
+        let cwd_cmd = exec_cmd("procstat", &["pwdx", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
-            .unwrap()
-            .stdout;
+            .unwrap();
+        let cwd_stdout = match cwd_cmd.status.success() {
+            true => cwd_cmd.stdout,
+            false => {
+                error!("Failed to get cwd for PID {}", pid);
+                return None;
+            }
+        };
         let cwd_full = String::from_utf8_lossy(&cwd_stdout);
         let cwd = cwd_full.split_whitespace().last().unwrap();
 
-        let cmdline_stdout = exec_cmd("procstat", &["pargs", &pid.to_string()[..]], false)
+        let cmdline_cmd = exec_cmd("procstat", &["pargs", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
-            .unwrap()
-            .stdout;
+            .unwrap();
+        let cmdline_stdout = match cmdline_cmd.status.success() {
+            true => cmdline_cmd.stdout,
+            false => {
+                error!("Failed to get cmdline for PID {}", pid);
+                return None;
+            }
+        };
         let cmdline_full = String::from_utf8_lossy(&cmdline_stdout);
         let mut cmdline: Vec<String> = Vec::new();
         for line in cmdline_full.split('\n') {
@@ -420,11 +531,17 @@ impl PIDInfo {
         }
         cmdline.remove(0);
 
-        let environ_stdout = exec_cmd("procstat", &["penv", &pid.to_string()[..]], false)
+        let environ_cmd = exec_cmd("procstat", &["penv", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
-            .unwrap()
-            .stdout;
+            .unwrap();
+        let environ_stdout = match environ_cmd.status.success() {
+            true => environ_cmd.stdout,
+            false => {
+                error!("Failed to get environ for PID {}", pid);
+                return None;
+            }
+        };
         let environ_full = String::from_utf8_lossy(&environ_stdout);
         let mut environ: Vec<String> = Vec::new();
         for line in environ_full.split('\n') {
@@ -443,24 +560,39 @@ impl PIDInfo {
     }
 
     pub fn terminate(&self) {
-        let _ = exec_cmd("kill", &["-9", &self.pid.to_string()], false)
+        if !exec_cmd("kill", &["-9", &self.pid.to_string()], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to terminate PID {}", &self.pid);
+        }
     }
 
     pub fn quarantine(&self) {
-        let _ = exec_cmd("mv", &[&self.exe, "./quarantine"], false)
+        if !exec_cmd("mv", &[&self.exe, "./quarantine"], false)
             .unwrap()
-            .wait();
-        let _ = exec_cmd("chmod", &["444", &self.exe], false)
+            .wait()
             .unwrap()
-            .wait();
+            .success()
+        {
+            error!("Failed to move exe {}", &self.exe);
+        }
+        if !exec_cmd("chmod", &["444", &self.exe], false)
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to chmod exe {}", &self.exe);
+        }
     }
 }
 
 #[cfg(target_os = "windows")]
 impl PIDInfo {
-    pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
+    pub fn new(pid: u64) -> Option<PIDInfo> {
         let mut out = PIDInfo {
             pid,
             exe: String::from("N/A"),
@@ -469,11 +601,17 @@ impl PIDInfo {
             cmdline: String::from("N/A"),
             environ: String::from("N/A"),
         };
-        let exe_stdout = exec_cmd("powershell", &["-ExecutionPolicy", "Bypass", &format!("Get-WmiObject Win32_Process -Filter \"ProcessId = {}\" | Select-Object ExecutablePath, CommandLine | Format-List", pid)], false)
+        let exe_cmd = exec_cmd("powershell", &["-ExecutionPolicy", "Bypass", &format!("Get-WmiObject Win32_Process -Filter \"ProcessId = {}\" | Select-Object ExecutablePath, CommandLine | Format-List", pid)], false)
             .unwrap()
             .wait_with_output()
-            .unwrap()
-            .stdout;
+            .unwrap();
+        let exe_stdout = match exe_cmd.status.success() {
+            true => exe_cmd.stdout,
+            false => {
+                error!("Failed to get process info");
+                return None;
+            }
+        };
         let exe = String::from_utf8_lossy(&exe_stdout);
 
         let comps: Vec<&str> = exe.split("\r\n").collect();
@@ -495,19 +633,29 @@ impl PIDInfo {
                 None => {}
             }
         }
-        Ok(out)
+        Some(out)
     }
 
     pub fn terminate(&self) {
-        let _ = exec_cmd("taskkill", &["/PID", &self.pid.to_string(), "/F"], false)
+        if !exec_cmd("taskkill", &["/PID", &self.pid.to_string(), "/F"], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to terminate PID {}", &self.exe);
+        }
     }
 
     pub fn quarantine(&self) {
-        let _ = exec_cmd("move", &[&self.exe, ".\\quarantine"], false)
+        if !exec_cmd("move", &[&self.exe, ".\\quarantine"], false)
             .unwrap()
-            .wait();
+            .wait()
+            .unwrap()
+            .success()
+        {
+            error!("Failed to move exe {}", &self.exe);
+        }
         println!("Please revoke all execution access, or get this thing out of here");
     }
 }

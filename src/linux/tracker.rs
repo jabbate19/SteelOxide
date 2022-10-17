@@ -2,8 +2,8 @@ use crate::utils::{exec_cmd, yes_no, PIDInfo};
 use log::{error, info, warn};
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::net::{IpAddr, SocketAddr};
 use std::fs::create_dir;
+use std::net::{IpAddr, SocketAddr};
 
 #[derive(Eq, Hash, PartialEq)]
 struct Socket {

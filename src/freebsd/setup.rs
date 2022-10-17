@@ -213,11 +213,16 @@ fn configure_firewall(config: &mut PfConfig) {
         ));
         info!("Blocking SSH to Router");
         if yes_no("In that case, want me to just kill SSH all together?".to_owned()) {
-            exec_cmd("chmod", &["444", "/etc/sshd"], false)
+            let sshd_chmod = exec_cmd("chmod", &["444", "/etc/sshd"], false)
                 .unwrap()
                 .wait()
                 .unwrap();
-            info!("Disabled /etc/sshd");
+            if sshd_chmod.success() {
+                info!("Disabled /etc/sshd");
+            } else {
+                error!("Failed to chmod /etc/sshd");
+            }
+
             println!("Just make sure to stop it in the pf console");
         }
     }
@@ -233,10 +238,26 @@ fn configure_firewall(config: &mut PfConfig) {
     ));
     info!("Added rules for webconfig");
 
-    let _ = exec_cmd("cp", &["/etc/pf.conf", "/root/old_pf.conf"], false);
-    fs::write("/etc/pf.conf", output).unwrap();
-    let _ = exec_cmd("pfctl", &["-f", "/etc/pf.conf"], false);
-    info!("Rules have been applied to system!");
+    let cp_old = exec_cmd("cp", &["/etc/pf.conf", "/root/old_pf.conf"], false)
+        .unwrap()
+        .wait()
+        .unwrap();
+    if cp_old.success() {
+        fs::write("/etc/pf.conf", output).unwrap();
+        let set_rules = exec_cmd("pfctl", &["-f", "/etc/pf.conf"], false)
+            .unwrap()
+            .wait()
+            .unwrap();
+        if set_rules.success() {
+            info!("Rules have been applied to system!");
+        } else {
+            error!("Error in applying rules");
+        }
+    } else {
+        error!("Error in copying old pf.conf");
+        fs::write("./new_pf.conf", output).unwrap();
+        error!("New pf.conf saved as ./new_pf.conf");
+    }
 }
 
 fn get_version(config: &mut PfConfig) {
@@ -306,20 +327,32 @@ fn verity_etc_files(config: &PfConfig) {
 fn check_hashes_find_files(dir: &Path, hashes: &Value) {
     let current_dir = env::current_dir().unwrap();
     env::set_current_dir(dir).unwrap();
-    let all_files_stdout = exec_cmd("find", &[".", "-type", "f"], false)
+    let all_files_cmd = exec_cmd("find", &[".", "-type", "f"], false)
         .unwrap()
         .wait_with_output()
-        .unwrap()
-        .stdout;
+        .unwrap();
+    let all_files_stdout = match all_files_cmd.status.success() {
+        true => all_files_cmd.stdout,
+        false => {
+            error!("Failed to recursively find all files in {}", dir);
+            return;
+        }
+    };
     let all_files = String::from_utf8_lossy(&all_files_stdout);
     for file in all_files.split("\n") {
         match hashes.get(file) {
             Some(known_hash) => {
-                let new_hash_stdout = exec_cmd("sha1sum", &[file], false)
+                let new_hash_cmd = exec_cmd("sha1sum", &[file], false)
                     .unwrap()
                     .wait_with_output()
-                    .unwrap()
-                    .stdout;
+                    .unwrap();
+                let new_hash_stdout = match new_hash_cmd.status.success() {
+                    true => new_hash_cmd.stdout,
+                    false => {
+                        error!("Failed to sha1sum {}", file);
+                        continue;
+                    }
+                };
                 let new_hash = String::from_utf8_lossy(&new_hash_stdout);
                 if known_hash != new_hash.split_whitespace().next().unwrap() {
                     warn!("Hash for {} does not match key!", file);
@@ -358,6 +391,14 @@ fn audit_users(config: &mut PfConfig) {
     let password = prompt_password("Enter password for users: ").unwrap();
     for user in UserInfo::get_all_users() {
         println!("{:?}", user);
+        if user.uid == 0 {
+            warn!("{} has root UID!", user.username);
+        } else if user.uid < 1000 {
+            warn!("{} has admin UID!", user.username);
+        }
+        if user.gid == 0 {
+            warn!("{} has root GID!", user.username);
+        }
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
@@ -368,21 +409,18 @@ fn audit_users(config: &mut PfConfig) {
             }
         }
         user.change_password(&password);
-        let cron = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
+        let cron_cmd = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
             .unwrap()
             .wait_with_output()
-            .unwrap()
-            .stdout;
-        let cron_str = String::from_utf8_lossy(&cron).to_string();
+            .unwrap();
+        let cron_stdout = match cron_cmd.status.success() {
+            true => cron_cmd.stdout,
+            false => {
+                error!("Failed to get cron jobs for {}", user.username);
+            }
+        };
+        let cron_str = String::from_utf8_lossy(&cron_stdout).to_string();
         fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
-        if user.uid == 0 {
-            warn!("{} has root UID!", user.username);
-        } else if user.uid < 1000 {
-            warn!("{} has admin UID!", user.username);
-        }
-        if user.gid == 0 {
-            warn!("{} has root GID!", user.username);
-        }
     }
 }
 
