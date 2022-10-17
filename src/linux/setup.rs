@@ -1,4 +1,5 @@
 use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, SysConfig, UserInfo};
+use log::{debug, error, info, warn};
 use rpassword::prompt_password;
 use std::{
     collections::HashMap,
@@ -78,6 +79,7 @@ fn configure_firewall(config: &mut SysConfig) {
             }
         }
     }
+    debug!("Resetting Firewall and deleting old rules");
     let _ = exec_cmd("iptables", &["-F"], false).unwrap().wait();
     let _ = exec_cmd("iptables", &["-t", "mangle", "-F"], false)
         .unwrap()
@@ -91,6 +93,7 @@ fn configure_firewall(config: &mut SysConfig) {
     let _ = exec_cmd("iptables", &["-P", "FORWARD", "ACCEPT"], false)
         .unwrap()
         .wait();
+    info!("Firewall has been wiped");
     let _ = exec_cmd(
         "iptables",
         &["-A", "INPUT", "-p", "imcp", "-j", "ACCEPT"],
@@ -98,6 +101,7 @@ fn configure_firewall(config: &mut SysConfig) {
     )
     .unwrap()
     .wait();
+    info!("Added ICMP Rule");
     for port in &config.ports {
         let _ = exec_cmd(
             "iptables",
@@ -131,6 +135,7 @@ fn configure_firewall(config: &mut SysConfig) {
         )
         .unwrap()
         .wait();
+        info!("Add Port {} Rule", port);
     }
 }
 
@@ -140,8 +145,10 @@ fn audit_users(config: &mut SysConfig) {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
+                info!("Local User {} was found and kept", user.username);
             } else {
                 user.shutdown();
+                info!("Local User {} was found and disabled", user.username);
             }
         }
         user.change_password(&password);
@@ -153,12 +160,12 @@ fn audit_users(config: &mut SysConfig) {
         let cron_str = String::from_utf8_lossy(&cron).to_string();
         fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
         if user.uid == 0 {
-            println!("{} has root UID!", user.username);
+            warn!("{} has root UID!", user.username);
         } else if user.uid < 1000 {
-            println!("{} has admin UID!", user.username);
+            warn!("{} has admin UID!", user.username);
         }
         if user.gid == 0 {
-            println!("{} has root GID!", user.username);
+            warn!("{} has root GID!", user.username);
         }
     }
 }
@@ -182,6 +189,7 @@ fn select_services(config: &mut SysConfig) {
         let _ = exec_cmd("systemctl", &["start", &service], false)
             .unwrap()
             .wait();
+        info!("Service {} will be maintained and kept alive", service);
     }
 }
 
@@ -210,5 +218,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_string_pretty(&config).unwrap(),
     )
     .unwrap();
+    info!("Data on system has been added to config.json");
     Ok(())
 }

@@ -1,5 +1,6 @@
 use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, ADUserInfo, LocalUserInfo, SysConfig};
 use get_if_addrs::{get_if_addrs, Interface};
+use log::{debug, error, info, warn};
 use rpassword::prompt_password;
 use std::collections::HashMap;
 use std::fs;
@@ -71,6 +72,7 @@ fn configure_firewall(config: &mut SysConfig) {
             }
         }
     }
+    debug!("Resetting Firewall and deleting old rules");
     let _ = exec_cmd("netsh", &["advfirewall", "reset"], false)
         .unwrap()
         .wait();
@@ -88,6 +90,8 @@ fn configure_firewall(config: &mut SysConfig) {
     )
     .unwrap()
     .wait();
+    info!("Firewall has been wiped");
+    debug!("Adding New Rules");
     let _ = exec_cmd(
         "netsh",
         &[
@@ -115,6 +119,7 @@ fn configure_firewall(config: &mut SysConfig) {
     )
     .unwrap()
     .wait();
+    info!("Added ICMP Rule");
     for port in &config.ports {
         let _ = exec_cmd(
             "netsh",
@@ -184,54 +189,60 @@ fn configure_firewall(config: &mut SysConfig) {
         )
         .unwrap()
         .wait();
+        info!("Add Port {} Rule", port);
     }
 }
 
-fn audit_users(config: &mut SysConfig) {
-    let password = prompt_password("Enter password for valid users: ").unwrap();
-    for user in ADUserInfo::get_all_users() {
+fn audit_local_users(config: &mut SysConfig, password: String) {
+    for user in LocalUserInfo::get_all_users() {
         println!("{:?}", user);
         if user.groups.contains(&"Domain Admins".to_owned()) {
-            println!("{} is a Domain Admin!", user.name);
+            warn!("{} is a Domain Admin!", user.name);
         }
         if user.groups.contains(&"Schema Admins".to_owned()) {
-            println!("{} is a Schema Admin!", user.name);
+            warn!("{} is a Schema Admin!", user.name);
         }
         if user.groups.contains(&"Enterprise Admins".to_owned()) {
-            println!("{} is an Enterprise Admin!", user.name);
+            warn!("{} is an Enterprise Admin!", user.name);
         }
         if user.groups.contains(&"Administrators".to_owned()) {
-            println!("{} is an administrator!", user.name);
+            warn!("{} is an administrator!", user.name);
         }
         if user.enabled {
             if yes_no(format!("Keep user {}", &user.name)) {
                 config.users.push(String::from(&user.name));
+                info!("Local User {} was found and kept", user.name);
             } else {
                 user.shutdown();
+                info!("Local User {} was found and disabled", user.name);
             }
         }
         user.change_password(&password);
     }
+}
 
-    for user in LocalUserInfo::get_all_users() {
+fn audit_ad_users(config: &mut SysConfig, password: String) {
+    for user in ADUserInfo::get_all_users() {
         println!("{:?}", user);
         if user.groups.contains(&"Domain Admins".to_owned()) {
-            println!("{} is a Domain Admin!", user.name);
+            warn!("{} is a Domain Admin!", user.name);
         }
         if user.groups.contains(&"Schema Admins".to_owned()) {
-            println!("{} is a Schema Admin!", user.name);
+            warn!("{} is a Schema Admin!", user.name);
         }
         if user.groups.contains(&"Enterprise Admins".to_owned()) {
-            println!("{} is an Enterprise Admin!", user.name);
+            warn!("{} is an Enterprise Admin!", user.name);
         }
         if user.groups.contains(&"Administrators".to_owned()) {
-            println!("{} is an administrator!", user.name);
+            warn!("{} is an administrator!", user.name);
         }
         if user.enabled {
             if yes_no(format!("Keep user {}", &user.name)) {
                 config.users.push(String::from(&user.name));
+                info!("AD User {} was found and kept", user.name);
             } else {
                 user.shutdown();
+                info!("AD User {} was found and disabled", user.name);
             }
         }
         user.change_password(&password);
@@ -262,6 +273,7 @@ fn select_services(config: &mut SysConfig) {
         )
         .unwrap()
         .wait();
+        info!("Service {} will be maintained and kept alive", service);
     }
 }
 
@@ -273,14 +285,14 @@ fn scheduled_tasks() {
         .stdout;
     let schtasks_str = String::from_utf8_lossy(&schtasks_out);
     fs::write("schtasks.csv", format!("{}", schtasks_str)).unwrap();
-    println!("Deleting tasks...");
     let _ = exec_cmd("schtasks", &["/delete", "/tn", "*", "/f"], false)
         .unwrap()
         .wait();
+    info!("Scheduled Tasks have been stored in schtasks.csv and have been deleted");
 }
 
 fn download_sysinternals() {
-    println!("Downloading sysinternals...");
+    debug!("Downloading sysinternals...");
     let _ = exec_cmd(
         "curl",
         &[
@@ -292,7 +304,7 @@ fn download_sysinternals() {
     )
     .unwrap()
     .wait();
-    println!("SysinternalsSuite.zip has been put in your current directory!");
+    info!("SysinternalsSuite.zip has been put in your current directory!");
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -304,7 +316,11 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         users: Vec::new(),
     };
     configure_firewall(&mut config);
-    audit_users(&mut config);
+    let password = prompt_password("Enter password for valid users: ").unwrap();
+    audit_local_users(&mut config, password);
+    if yes_no("Check AD Users (Must be on AD Server)".to_owned()) {
+        audit_ad_users(&mut config, password);
+    }
     select_services(&mut config);
     scheduled_tasks();
     download_sysinternals();
@@ -313,5 +329,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_string_pretty(&config).unwrap(),
     )
     .unwrap();
+    info!("Data on system has been added to config.json");
     Ok(())
 }

@@ -1,4 +1,5 @@
 use crate::utils::{exec_cmd, yes_no, PIDInfo};
+use log::{error, info, warn};
 use std::collections::HashSet;
 use std::fmt::Display;
 
@@ -68,8 +69,11 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", pid);
                     if yes_no("Keep socket".to_string()) {
                         safe.insert(sock);
+                        info!("{} kept", sock);
                     } else {
-                        pid.terminate()
+                        pid.terminate();
+                        warn!("{} was found to be malicious!", sock);
+                        warn!("PID: {}", pid);
                     }
                 }
             }

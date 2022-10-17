@@ -1,4 +1,5 @@
 use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, Permissions, PfConfig, UserInfo};
+use log::{error, info, warn};
 use rpassword::prompt_password;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -52,6 +53,11 @@ fn configure_firewall(config: &mut PfConfig) {
     stdin().read_line(&mut config.lan_subnet).unwrap();
     config.lan_subnet = config.lan_subnet.trim().to_owned();
 
+    info!(
+        "LAN on {} | {}/{}",
+        config.lan_interface, config.lan_ip, config.lan_subnet
+    );
+
     println!("WAN INTERFACE");
 
     let wan_interface_data = get_interface_and_ip();
@@ -64,6 +70,11 @@ fn configure_firewall(config: &mut PfConfig) {
     let _ = stdout().flush();
     stdin().read_line(&mut config.wan_subnet).unwrap();
     config.wan_subnet = config.wan_subnet.trim().to_owned();
+
+    info!(
+        "WAN on {} | {}/{}",
+        config.wan_interface, config.wan_ip, config.wan_subnet
+    );
 
     if yes_no("Add DMZ".to_owned()) {
         println!("DMZ INTERFACE");
@@ -79,6 +90,13 @@ fn configure_firewall(config: &mut PfConfig) {
         let _ = stdout().flush();
         stdin().read_line(&mut dmz_sub).unwrap();
         config.dmz_subnet = Some(dmz_sub.trim().to_owned());
+
+        info!(
+            "DMZ on {} | {}/{}",
+            config.dmz_interface.as_ref().unwrap(),
+            config.dmz_ip.as_ref().unwrap(),
+            config.dmz_subnet.as_ref().unwrap()
+        );
     }
 
     loop {
@@ -158,6 +176,7 @@ fn configure_firewall(config: &mut PfConfig) {
                 "pass out quick proto {{ udp tcp }} from {} to any port {{ {} }}\n",
                 perm.ip, port
             ));
+            info!("Allowing traffic to/from {} on port {}", perm.ip, port);
         }
         if perm.allow_icmp {
             output.push_str("\n### ICMP\n");
@@ -169,6 +188,7 @@ fn configure_firewall(config: &mut PfConfig) {
                 "pass out quick proto {{ icmp }} from {} to any\n",
                 perm.ip
             ));
+            info!("Allowing ICMP to Device");
         }
     }
     output.push_str("\n#### Common Allows\n");
@@ -185,16 +205,19 @@ fn configure_firewall(config: &mut PfConfig) {
             "pass out quick proto {{ tcp udp }} from {} port {{ 22 }} to {}\n",
             config.lan_ip, config.lan_subnet
         ));
+        info!("Allowing SSH to Router");
     } else {
         output.push_str(&format!(
             "\n#### No SSH :(\nblock in proto {{ tcp udp }} from any to {} port {{ 22 }}\n",
             config.wan_ip
         ));
+        info!("Blocking SSH to Router");
         if yes_no("In that case, want me to just kill SSH all together?".to_owned()) {
             exec_cmd("chmod", &["444", "/etc/sshd"], false)
                 .unwrap()
                 .wait()
                 .unwrap();
+            info!("Disabled /etc/sshd");
             println!("Just make sure to stop it in the pf console");
         }
     }
@@ -208,10 +231,12 @@ fn configure_firewall(config: &mut PfConfig) {
         "pass out quick proto {{ tcp udp }} from {} port {{ 80 }} to {} \n",
         config.lan_ip, config.lan_subnet
     ));
+    info!("Added rules for webconfig");
 
     let _ = exec_cmd("cp", &["/etc/pf.conf", "/root/old_pf.conf"], false);
     fs::write("/etc/pf.conf", output).unwrap();
     let _ = exec_cmd("pfctl", &["-f", "/etc/pf.conf"], false);
+    info!("Rules have been applied to system!");
 }
 
 fn get_version(config: &mut PfConfig) {
@@ -240,6 +265,7 @@ fn get_version(config: &mut PfConfig) {
         let mut version = String::new();
         stdin().read_line(&mut version).unwrap();
         if versions.contains(&&version[..]) {
+            info!("PfSense version identifed as {}", version);
             config.version = Some(version);
         } else if version == "N/A" {
             break;
@@ -254,8 +280,14 @@ fn verify_web_config(config: &PfConfig) {
     .unwrap()
     .json::<serde_json::Value>()
     .unwrap();
-    check_hashes_find_files(&Path::new("/usr/local/www"), hashes.get(&config.version.as_ref().unwrap()).unwrap());
-    check_hashes_check_files(&Path::new("/usr/local/www"), hashes.get(&config.version.as_ref().unwrap()).unwrap());
+    check_hashes_find_files(
+        &Path::new("/usr/local/www"),
+        hashes.get(&config.version.as_ref().unwrap()).unwrap(),
+    );
+    check_hashes_check_files(
+        &Path::new("/usr/local/www"),
+        hashes.get(&config.version.as_ref().unwrap()).unwrap(),
+    );
 }
 
 fn verity_etc_files(config: &PfConfig) {
@@ -265,7 +297,10 @@ fn verity_etc_files(config: &PfConfig) {
     .unwrap()
     .json::<serde_json::Value>()
     .unwrap();
-    check_hashes_check_files(&Path::new("/etc"), hashes.get(&config.version.as_ref().unwrap()).unwrap());
+    check_hashes_check_files(
+        &Path::new("/etc"),
+        hashes.get(&config.version.as_ref().unwrap()).unwrap(),
+    );
 }
 
 fn check_hashes_find_files(dir: &Path, hashes: &Value) {
@@ -287,11 +322,11 @@ fn check_hashes_find_files(dir: &Path, hashes: &Value) {
                     .stdout;
                 let new_hash = String::from_utf8_lossy(&new_hash_stdout);
                 if known_hash != new_hash.split_whitespace().next().unwrap() {
-                    println!("Hash for {} does not match key!", file);
+                    warn!("Hash for {} does not match key!", file);
                 }
             }
             None => {
-                println!("{} does not exist in dictionary!", file);
+                warn!("{} does not exist in dictionary!", file);
             }
         }
     }
@@ -310,10 +345,10 @@ fn check_hashes_check_files(dir: &Path, hashes: &Value) {
             let new_hash_stdout = new_hash_cmd.stdout;
             let new_hash = String::from_utf8_lossy(&new_hash_stdout);
             if known_hash != new_hash.split_whitespace().next().unwrap() {
-                println!("Hash for {} does not match key!", file);
+                warn!("Hash for {} does not match key!", file);
             }
         } else {
-            println!("Hash for {} had an error (Likely doesn't exist!", file);
+            error!("Hash for {} had an error (Likely doesn't exist)!", file);
         }
     }
     env::set_current_dir(&current_dir).unwrap();
@@ -325,8 +360,10 @@ fn audit_users(config: &mut PfConfig) {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
+                info!("Local User {} was found and kept", user.name);
             } else {
                 user.shutdown();
+                info!("Local User {} was found and disabled", user.name);
             }
         }
         user.change_password(&password);
@@ -338,12 +375,12 @@ fn audit_users(config: &mut PfConfig) {
         let cron_str = String::from_utf8_lossy(&cron).to_string();
         fs::write(&format!("cron_{}.json", user.username), cron_str).unwrap();
         if user.uid == 0 {
-            println!("{} has root UID!", user.username);
+            warn!("{} has root UID!", user.username);
         } else if user.uid < 1000 {
-            println!("{} has admin UID!", user.username);
+            warn!("{} has admin UID!", user.username);
         }
         if user.gid == 0 {
-            println!("{} has root GID!", user.username);
+            warn!("{} has root GID!", user.username);
         }
     }
 }
@@ -373,5 +410,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_string_pretty(&config).unwrap(),
     )
     .unwrap();
+    info!("Data on system has been added to config.json");
     Ok(())
 }
