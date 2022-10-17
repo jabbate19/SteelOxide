@@ -280,17 +280,19 @@ fn scheduled_tasks() {
         .stdout;
     let schtasks_str = String::from_utf8_lossy(&schtasks_out);
     fs::write("schtasks.csv", format!("{}", schtasks_str)).unwrap();
+    println!("Deleting tasks...");
     let _ = exec_cmd("schtasks", &["/delete", "/tn", "*", "/f"], false)
         .unwrap()
         .wait();
 }
 
 fn download_sysinternals() {
+    println!("Downloading sysinternals...");
     let _ = exec_cmd(
         "curl",
         &[
             "https://download.sysinternals.com/files/SysinternalsSuite.zip",
-            "-OutFile",
+            "-o",
             "SysintenalsSuite.zip",
         ],
         false,

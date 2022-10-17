@@ -106,15 +106,14 @@ impl ADUserInfo {
 
     pub fn get_all_users() -> Vec<ADUserInfo> {
         let mut out: Vec<ADUserInfo> = Vec::new();
-        let all_users_out = exec_cmd("powershell", &[
+        let all_users_cmd = exec_cmd("powershell", &[
             "-ExecutionPolicy",
             "Bypass",
-            "Get-ADUser -Filter * -Properties SamAccountname,Name,DisplayName,Enabled,memberof | % {New-Object PSObject -Property @{Name = $_.Name; DisplayName = $_.DisplayName; SamAccountname= $_.SamAccountname; Enabled = $_.Enabled; Groups = ($_.memberof | Get-ADGroup | Select -ExpandProperty Name) -join ","}} | Select Name, DisplayName, Enabled, SamAccountname, Groups | Format-List"
-        ], false).unwrap().wait_with_output().unwrap().stdout;
-        let all_users_str = String::from_utf8_lossy(&all_users_out);
+            "Get-ADUser -Filter * -Properties SamAccountname,Name,DisplayName,Enabled,memberof | % {New-Object PSObject -Property @{Name = $_.Name; DisplayName = $_.DisplayName; SamAccountname= $_.SamAccountname; Enabled = $_.Enabled; Groups = ($_.memberof | Get-ADGroup | Select -ExpandProperty Name) -join \",\"}} | Select Name, DisplayName, Enabled, SamAccountname, Groups | Format-List"
+        ], false).unwrap().wait_with_output().unwrap();
+        let all_users_str = String::from_utf8_lossy(&all_users_cmd.stdout);
         let all_users_split = all_users_str.split("\r\n\r\n");
         for user in all_users_split {
-            println!("AD User: {}", user);
             match ADUserInfo::new(user.to_owned()) {
                 Some(ad_user) => {
                     out.push(ad_user);
@@ -224,7 +223,6 @@ impl LocalUserInfo {
         let all_users_str = String::from_utf8_lossy(&all_users_out);
         let all_users_split = all_users_str.split("\r\n");
         for user in all_users_split {
-            println!("Local User: {}", user);
             match LocalUserInfo::new(user.trim().to_owned()) {
                 Some(local_user) => {
                     out.push(local_user);
