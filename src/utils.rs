@@ -160,6 +160,7 @@ impl LocalUserInfo {
             .stdout;
         let fields_str = String::from_utf8_lossy(&fields_out);
         let fields_split = fields_str.split("\r\n");
+        let mut something = false;
         for field in fields_split {
             let (k, v) = match field.split_once("  ") {
                 Some(key_val) => key_val,
@@ -173,12 +174,15 @@ impl LocalUserInfo {
             match trimmed {
                 "User name" => {
                     out.name = val;
+                    something = true;
                 }
                 "Full Name" => {
                     out.full_name = val;
+                    something = true;
                 }
                 "Account active" => {
                     out.enabled = val == "Yes";
+                    something = true;
                 }
                 "Local Group Memberships" => {
                     let group_strings = val.split('*');
@@ -188,6 +192,7 @@ impl LocalUserInfo {
                             out.groups.push(group_trimmed);
                         }
                     }
+                    something = true;
                 }
                 "Global Group Memberships" => {
                     let group_strings = val.split('*');
@@ -197,11 +202,16 @@ impl LocalUserInfo {
                             out.groups.push(group_trimmed);
                         }
                     }
+                    something = true;
                 }
                 _ => {}
             }
         }
-        Some(out)
+        if something {
+            Some(out)
+        } else {
+            None
+        }
     }
 
     pub fn get_all_users() -> Vec<LocalUserInfo> {
