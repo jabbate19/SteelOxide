@@ -1,11 +1,10 @@
-use crate::utils::{exec_cmd, yes_no, ADUserInfo, LocalUserInfo, SysConfig, get_interface_and_ip};
+use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, ADUserInfo, LocalUserInfo, SysConfig};
 use get_if_addrs::{get_if_addrs, Interface};
 use rpassword::prompt_password;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{stdin, stdout, Write};
 use std::net::{IpAddr, Ipv4Addr};
-
 
 fn configure_firewall(config: &mut SysConfig) {
     let default_services: HashMap<String, Vec<String>> = HashMap::from([
@@ -21,21 +20,15 @@ fn configure_firewall(config: &mut SysConfig) {
             ]),
         ),
         (String::from("DNS"), Vec::from([String::from("53")])),
-        (
-            String::from("HTTP"),
-            Vec::from([String::from("80"), String::from("443")]),
-        ),
-        (
-            String::from("LDAP"),
-            Vec::from([String::from("389"), String::from("636")]),
-        ),
+        (String::from("HTTP"), Vec::from([String::from("80")])),
+        (String::from("HTTPS"), Vec::from([String::from("443")])),
+        (String::from("LDAP"), Vec::from([String::from("389")])),
+        (String::from("LDAPS"), Vec::from([String::from("636")])),
         (String::from("NTP"), Vec::from([String::from("123")])),
         (String::from("SMTP"), Vec::from([String::from("25")])),
         (String::from("SSH"), Vec::from([String::from("22")])),
-        (
-            String::from("WinRM"),
-            Vec::from([String::from("5985"), String::from("5986")]),
-        ),
+        (String::from("WinRM"), Vec::from([String::from("5985")])),
+        (String::from("WinRMS"), Vec::from([String::from("5986")])),
     ]);
     let interface_data = get_interface_and_ip();
     println!("{} => {}", interface_data.name, interface_data.ip());

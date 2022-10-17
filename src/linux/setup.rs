@@ -1,4 +1,4 @@
-use crate::utils::{exec_cmd, yes_no, SysConfig, UserInfo, get_interface_and_ip};
+use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, SysConfig, UserInfo};
 use rpassword::prompt_password;
 use std::{
     collections::HashMap,

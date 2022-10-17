@@ -1,4 +1,4 @@
-use crate::utils::{exec_cmd, yes_no, Permissions, PfConfig, UserInfo, get_interface_and_ip};
+use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, Permissions, PfConfig, UserInfo};
 use rpassword::prompt_password;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -70,14 +70,15 @@ fn configure_firewall(config: &mut PfConfig) {
 
         let dmz_interface_data = get_interface_and_ip();
 
-        config.dmz_interface = String::from(&dmz_interface_data.name);
+        config.dmz_interface = Some(String::from(&dmz_interface_data.name));
 
-        config.dmz_ip = dmz_interface_data.ip();
+        config.dmz_ip = Some(dmz_interface_data.ip());
 
         print!("Enter CIDR of DMZ: ");
+        let mut dmz_sub = String::new();
         let _ = stdout().flush();
-        stdin().read_line(&mut config.dmz_subnet).unwrap();
-        config.wan_subnet = config.dmz_subnet.trim().to_owned();
+        stdin().read_line(&mut dmz_sub).unwrap();
+        config.dmz_subnet = Some(dmz_sub.trim().to_owned());
     }
 
     loop {
@@ -90,6 +91,12 @@ fn configure_firewall(config: &mut PfConfig) {
         let _ = stdout().flush();
         stdin().read_line(&mut perm.ip).unwrap();
         perm.ip = perm.ip.trim().to_owned();
+        {
+            let _ip_test: Ipv4Addr = match &perm.ip.parse() {
+                Ok(x) => *x,
+                Err(_) => continue,
+            };
+        }
         loop {
             let mut port = String::new();
             print!("Enter Port/Common Service to Allow, '?', or nothing to stop: ");
@@ -256,7 +263,7 @@ fn verity_etc_files() {
     ];
 
     let hashes = reqwest::blocking::get(
-        "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/pfsense_etc.json"
+        "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/pfsense_etc.json",
     )
     .unwrap()
     .json::<serde_json::Value>()
@@ -336,7 +343,7 @@ fn check_hashes_check_files(dir: &Path, hashes: &Value) {
             }
         } else {
             println!("Hash for {} had an error (Likely doesn't exist!", file);
-        }        
+        }
     }
     env::set_current_dir(&current_dir).unwrap();
 }

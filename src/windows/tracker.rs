@@ -1,4 +1,4 @@
-use crate::utils::{PIDInfo, yes_no, exec_cmd};
+use crate::utils::{exec_cmd, yes_no, PIDInfo};
 use std::collections::HashSet;
 use std::fmt::Display;
 
@@ -38,11 +38,7 @@ impl Display for Socket {
         write!(
             f,
             "{} | {} | {} | {} | {}",
-            self.protocol,
-            self.local_addr,
-            self.foreign_addr,
-            self.state,
-            self.pid,
+            self.protocol, self.local_addr, self.foreign_addr, self.state, self.pid,
         )
     }
 }
@@ -74,4 +70,3 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 }
-

@@ -1,3 +1,4 @@
+use get_if_addrs::{get_if_addrs, Interface};
 use serde::{Deserialize, Serialize};
 use std::process::{Command, ExitStatus, Stdio};
 use std::{
@@ -8,7 +9,6 @@ use std::{
     path::Path,
     process::Child,
 };
-use get_if_addrs::{get_if_addrs, Interface};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SysConfig {
@@ -164,7 +164,7 @@ impl LocalUserInfo {
                 Some(key_val) => key_val,
                 None => {
                     continue;
-                },
+                }
             };
             let key = k.to_owned().trim().to_owned();
             let val = v.to_owned().trim().to_owned();
@@ -197,9 +197,7 @@ impl LocalUserInfo {
                         }
                     }
                 }
-                _ => {
-
-                }
+                _ => {}
             }
         }
         Some(out)
@@ -531,7 +529,7 @@ pub fn get_interface_and_ip() -> Interface {
             Err(x) => {
                 println!("{}", x);
                 continue;
-            },
+            }
         };
         return interfaces.remove(selected_id);
     }
