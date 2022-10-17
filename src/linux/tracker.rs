@@ -3,6 +3,7 @@ use log::{error, info, warn};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::net::{IpAddr, SocketAddr};
+use std::fs::create_dir;
 
 #[derive(Eq, Hash, PartialEq)]
 struct Socket {
@@ -88,6 +89,7 @@ impl Display for Socket {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+    create_dir("./quarantine");
     let mut safe: HashSet<Socket> = HashSet::new();
     loop {
         let ss = exec_cmd("ss", &["-tupn0"], false)
@@ -114,6 +116,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         for pid in &pids {
                             warn!("{}", pid);
                             pid.terminate();
+                            if yes_no("Do you want to quarantine the binary".to_owned()) {
+                                pid.quarantine();
+                                info!("{} quarantined", pid.exe);
+                            }
                         }
                     }
                 }

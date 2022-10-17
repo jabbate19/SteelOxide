@@ -338,8 +338,8 @@ pub struct PIDInfo {
     pub environ: String,
 }
 
+#[cfg(target_os = "linux")]
 impl PIDInfo {
-    #[cfg(target_os = "linux")]
     pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
         let exe = read_link(format!("/proc/{}/exe", pid))?
             .display()
@@ -362,7 +362,24 @@ impl PIDInfo {
         })
     }
 
-    #[cfg(target_os = "freebsd")]
+    pub fn terminate(&self) {
+        let _ = exec_cmd("kill", &["-9", &self.pid.to_string()], false)
+            .unwrap()
+            .wait();
+    }
+
+    pub fn quarantine(&self) {
+        let _ = exec_cmd("mv", &[&self.exe, "./quarantine"], false)
+            .unwrap()
+            .wait();
+        let _ = exec_cmd("chmod", &["444", &self.exe], false)
+            .unwrap()
+            .wait();
+    }
+}
+
+#[cfg(target_os = "freebsd")]
+impl PIDInfo {
     pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
         let exe_stdout = exec_cmd("procstat", &["-b", &pid.to_string()[..]], false)
             .unwrap()
@@ -414,7 +431,24 @@ impl PIDInfo {
         })
     }
 
-    #[cfg(target_os = "windows")]
+    pub fn terminate(&self) {
+        let _ = exec_cmd("kill", &["-9", &self.pid.to_string()], false)
+            .unwrap()
+            .wait();
+    }
+
+    pub fn quarantine(&self) {
+        let _ = exec_cmd("mv", &[&self.exe, "./quarantine"], false)
+            .unwrap()
+            .wait();
+        let _ = exec_cmd("chmod", &["444", &self.exe], false)
+            .unwrap()
+            .wait();
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl PIDInfo {
     pub fn new(pid: u64) -> Result<PIDInfo, Box<dyn std::error::Error>> {
         let mut out = PIDInfo {
             pid,
@@ -457,6 +491,13 @@ impl PIDInfo {
         let _ = exec_cmd("taskkill", &["/PID", &self.pid.to_string(), "/F"], false)
             .unwrap()
             .wait();
+    }
+
+    pub fn quarantine(&self) {
+        let _ = exec_cmd("move", &[&self.exe, ".\\quarantine"], false)
+            .unwrap()
+            .wait();
+        println!("Please revoke all execution access, or get this thing out of here");
     }
 }
 
