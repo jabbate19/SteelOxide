@@ -1,4 +1,4 @@
-use crate::utils::{exec_cmd, yes_no, Permissions, PfConfig, UserInfo};
+use crate::utils::{exec_cmd, yes_no, Permissions, PfConfig, UserInfo, get_interface_and_ip};
 use rpassword::prompt_password;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -39,37 +39,46 @@ fn configure_firewall(config: &mut PfConfig) {
         ),
     ]);
 
-    print!("Enter IP Subnet of LAN: ");
+    println!("LAN INTERFACE");
+
+    let lan_interface_data = get_interface_and_ip();
+
+    config.lan_interface = String::from(&lan_interface_data.name);
+
+    config.lan_ip = lan_interface_data.ip();
+
+    print!("Enter CIDR of LAN: ");
     let _ = stdout().flush();
     stdin().read_line(&mut config.lan_subnet).unwrap();
     config.lan_subnet = config.lan_subnet.trim().to_owned();
 
-    print!("Enter IP of LAN Interface: ");
-    let _ = stdout().flush();
-    let mut lan_addr = String::new();
-    stdin().read_line(&mut lan_addr).unwrap();
-    config.lan_ip = lan_addr.trim().to_owned().parse().unwrap();
+    println!("WAN INTERFACE");
 
-    print!("Enter Name of LAN Interface: ");
-    let _ = stdout().flush();
-    stdin().read_line(&mut config.lan_interface).unwrap();
-    config.lan_interface = config.lan_interface.trim().to_owned();
+    let wan_interface_data = get_interface_and_ip();
 
-    print!("Enter IP Subnet of WAN: ");
+    config.wan_interface = String::from(&wan_interface_data.name);
+
+    config.wan_ip = wan_interface_data.ip();
+
+    print!("Enter CIDR of WAN: ");
     let _ = stdout().flush();
     stdin().read_line(&mut config.wan_subnet).unwrap();
     config.wan_subnet = config.wan_subnet.trim().to_owned();
 
-    print!("Enter IP of WAN Interface: ");
-    let _ = stdout().flush();
-    let mut wan_addr = String::new();
-    stdin().read_line(&mut wan_addr).unwrap();
-    config.wan_ip = wan_addr.trim().to_owned().parse().unwrap();
+    if yes_no("Add DMZ".to_owned()) {
+        println!("DMZ INTERFACE");
 
-    print!("Enter Name of WAN Interface: ");
-    let _ = stdout().flush();
-    stdin().read_line(&mut config.wan_interface).unwrap();
-    config.wan_interface = config.wan_interface.trim().to_owned();
+        let dmz_interface_data = get_interface_and_ip();
+
+        config.dmz_interface = String::from(&dmz_interface_data.name);
+
+        config.dmz_ip = dmz_interface_data.ip();
+
+        print!("Enter CIDR of DMZ: ");
+        let _ = stdout().flush();
+        stdin().read_line(&mut config.dmz_subnet).unwrap();
+        config.wan_subnet = config.dmz_subnet.trim().to_owned();
+    }
 
     loop {
         let mut perm = Permissions {
@@ -155,12 +164,9 @@ fn configure_firewall(config: &mut PfConfig) {
             ));
         }
     }
-    output.push_str("\n#### Common Allows\npass out proto {{ tcp udp }} from any to port {{ 22 53 80 123 443 }}\n");
-
-    output.push_str(&format!(
-        "\n#### No SSH :(\nblock in proto {{ tcp udp }} from any to {} port {{ 22 }}\n",
-        config.wan_ip
-    ));
+    output.push_str("\n#### Common Allows\n");
+    output.push_str("pass out proto {{ tcp udp }} from any to any port {{ 22 53 80 123 443 }}\n");
+    output.push_str("pass in proto {{ tcp udp }} from any port {{ 22 53 80 123 443 }} to any\n");
 
     if yes_no("Allow SSH to PfSense (Sorry @Drew)".to_owned()) {
         output.push_str("\n#### Allow SSH within Subnet\n");
@@ -172,12 +178,18 @@ fn configure_firewall(config: &mut PfConfig) {
             "pass out quick proto {{ tcp udp }} from {} port {{ 22 }} to {}\n",
             config.lan_ip, config.lan_subnet
         ));
-    } else if yes_no("In that case, want me to just kill SSH all together?".to_owned()) {
-        exec_cmd("chmod", &["444", "/etc/sshd"], false)
-            .unwrap()
-            .wait()
-            .unwrap();
-        println!("Just make sure to stop it in the pf console");
+    } else {
+        output.push_str(&format!(
+            "\n#### No SSH :(\nblock in proto {{ tcp udp }} from any to {} port {{ 22 }}\n",
+            config.wan_ip
+        ));
+        if yes_no("In that case, want me to just kill SSH all together?".to_owned()) {
+            exec_cmd("chmod", &["444", "/etc/sshd"], false)
+                .unwrap()
+                .wait()
+                .unwrap();
+            println!("Just make sure to stop it in the pf console");
+        }
     }
 
     output.push_str("\n#### Allow WebConfig\n");
@@ -228,7 +240,8 @@ fn verify_web_config() {
         let mut version = String::new();
         stdin().read_line(&mut version).unwrap();
         if versions.contains(&&version[..]) {
-            check_hashes_find_files(hashes.get(&version).unwrap());
+            check_hashes_find_files(&Path::new("/usr/local/www"), hashes.get(&version).unwrap());
+            check_hashes_check_files(&Path::new("/usr/local/www"), hashes.get(&version).unwrap());
             break;
         } else if version == "N/A" {
             break;
@@ -236,9 +249,50 @@ fn verify_web_config() {
     }
 }
 
-fn check_hashes_find_files(hashes: &Value) {
+fn verity_etc_files() {
+    let versions = [
+        "2_6_0", "2_5_2", "2_5_1", "2_5_0", "2_4_5", "2_4_4", "2_4_3", "2_4_2", "2_4_1", "2_4_0",
+        "2_3_5", "2_3_4", "2_3_3", "2_3_2", "2_3_1", "2_3_0", "2_2", "2_1", "2_0", "1_2",
+    ];
+
+    let hashes = reqwest::blocking::get(
+        "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/pfsense_etc.json"
+    )
+    .unwrap()
+    .json::<serde_json::Value>()
+    .unwrap();
+
+    loop {
+        println!(
+            "Version: {}",
+            match read_to_string("/etc/version") {
+                Ok(version) => version,
+                Err(_) => String::from("Error getting Version"),
+            }
+        );
+        println!(
+            "Patch: {}",
+            match read_to_string("/etc/version.patch") {
+                Ok(patch) => patch,
+                Err(_) => String::from("Error getting Patch"),
+            }
+        );
+        print!("Provide pfSense Version, or N/A for Other: ");
+        let _ = stdout().flush();
+        let mut version = String::new();
+        stdin().read_line(&mut version).unwrap();
+        if versions.contains(&&version[..]) {
+            check_hashes_check_files(&Path::new("/etc"), hashes.get(&version).unwrap());
+            break;
+        } else if version == "N/A" {
+            break;
+        }
+    }
+}
+
+fn check_hashes_find_files(dir: &Path, hashes: &Value) {
     let current_dir = env::current_dir().unwrap();
-    env::set_current_dir(&Path::new("/usr/local/www")).unwrap();
+    env::set_current_dir(dir).unwrap();
     let all_files_stdout = exec_cmd("find", &[".", "-type", "f"], false)
         .unwrap()
         .wait_with_output()
@@ -262,6 +316,27 @@ fn check_hashes_find_files(hashes: &Value) {
                 println!("{} does not exist in dictionary!", file);
             }
         }
+    }
+    env::set_current_dir(&current_dir).unwrap();
+}
+
+fn check_hashes_check_files(dir: &Path, hashes: &Value) {
+    let current_dir = env::current_dir().unwrap();
+    env::set_current_dir(dir).unwrap();
+    for (file, known_hash) in hashes.as_object().unwrap() {
+        let new_hash_cmd = exec_cmd("sha1sum", &[file], false)
+            .unwrap()
+            .wait_with_output()
+            .unwrap();
+        if new_hash_cmd.status.success() {
+            let new_hash_stdout = new_hash_cmd.stdout;
+            let new_hash = String::from_utf8_lossy(&new_hash_stdout);
+            if known_hash != new_hash.split_whitespace().next().unwrap() {
+                println!("Hash for {} does not match key!", file);
+            }
+        } else {
+            println!("Hash for {} had an error (Likely doesn't exist!", file);
+        }        
     }
     env::set_current_dir(&current_dir).unwrap();
 }
@@ -303,11 +378,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         wan_ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
         wan_subnet: String::new(),
         wan_interface: String::new(),
+        dmz_ip: None,
+        dmz_subnet: None,
+        dmz_interface: None,
         permissions: Vec::new(),
         users: Vec::new(),
     };
     configure_firewall(&mut config);
     verify_web_config();
+    verity_etc_files();
     audit_users(&mut config);
     fs::write(
         "config.json",

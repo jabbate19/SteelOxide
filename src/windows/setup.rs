@@ -1,4 +1,4 @@
-use crate::utils::{exec_cmd, yes_no, ADUserInfo, LocalUserInfo, SysConfig};
+use crate::utils::{exec_cmd, yes_no, ADUserInfo, LocalUserInfo, SysConfig, get_interface_and_ip};
 use get_if_addrs::{get_if_addrs, Interface};
 use rpassword::prompt_password;
 use std::collections::HashMap;
@@ -6,33 +6,6 @@ use std::fs;
 use std::io::{stdin, stdout, Write};
 use std::net::{IpAddr, Ipv4Addr};
 
-fn get_interface_and_ip() -> Interface {
-    let ip_a_stdout = exec_cmd("ipconfig", &["/all"], false)
-        .unwrap()
-        .wait_with_output()
-        .unwrap()
-        .stdout;
-    let ip_a_str = String::from_utf8_lossy(&ip_a_stdout);
-    loop {
-        println!("{}", &ip_a_str);
-        print!("Select internet interface: ");
-        let _ = stdout().flush();
-        let mut interface_name = String::new();
-        stdin().read_line(&mut interface_name).unwrap();
-        interface_name = interface_name.trim().to_owned();
-        match get_if_addrs()
-            .unwrap()
-            .into_iter()
-            .filter(|int| int.name.eq(&interface_name))
-            .next()
-        {
-            Some(ip) => {
-                return ip;
-            }
-            _ => continue,
-        }
-    }
-}
 
 fn configure_firewall(config: &mut SysConfig) {
     let default_services: HashMap<String, Vec<String>> = HashMap::from([
@@ -224,14 +197,7 @@ fn configure_firewall(config: &mut SysConfig) {
 fn audit_users(config: &mut SysConfig) {
     let password = prompt_password("Enter password for valid users: ").unwrap();
     for user in ADUserInfo::get_all_users() {
-        if user.enabled {
-            if yes_no(format!("Keep user {}", &user.name)) {
-                config.users.push(String::from(&user.name));
-            } else {
-                user.shutdown();
-            }
-        }
-        user.change_password(&password);
+        println!("{:?}", user);
         if user.groups.contains(&"Domain Admins".to_owned()) {
             println!("{} is a Domain Admin!", user.name);
         }
@@ -244,17 +210,18 @@ fn audit_users(config: &mut SysConfig) {
         if user.groups.contains(&"Administrators".to_owned()) {
             println!("{} is an administrator!", user.name);
         }
+        if user.enabled {
+            if yes_no(format!("Keep user {}", &user.name)) {
+                config.users.push(String::from(&user.name));
+            } else {
+                user.shutdown();
+            }
+        }
+        user.change_password(&password);
     }
 
     for user in LocalUserInfo::get_all_users() {
-        if user.enabled {
-            if yes_no(format!("Keep user {}", &user.name)) {
-                config.users.push(String::from(&user.name));
-            } else {
-                user.shutdown();
-            }
-        }
-        user.change_password(&password);
+        println!("{:?}", user);
         if user.groups.contains(&"Domain Admins".to_owned()) {
             println!("{} is a Domain Admin!", user.name);
         }
@@ -267,6 +234,14 @@ fn audit_users(config: &mut SysConfig) {
         if user.groups.contains(&"Administrators".to_owned()) {
             println!("{} is an administrator!", user.name);
         }
+        if user.enabled {
+            if yes_no(format!("Keep user {}", &user.name)) {
+                config.users.push(String::from(&user.name));
+            } else {
+                user.shutdown();
+            }
+        }
+        user.change_password(&password);
     }
 }
 
@@ -276,6 +251,7 @@ fn select_services(config: &mut SysConfig) {
         let _ = stdout().flush();
         let mut service = String::new();
         stdin().read_line(&mut service).unwrap();
+        service = service.trim().to_owned();
         if service.len() == 0 {
             break;
         }

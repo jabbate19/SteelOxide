@@ -1,5 +1,4 @@
-use crate::utils::{exec_cmd, yes_no, SysConfig, UserInfo};
-use get_if_addrs::{get_if_addrs, Interface};
+use crate::utils::{exec_cmd, yes_no, SysConfig, UserInfo, get_interface_and_ip};
 use rpassword::prompt_password;
 use std::{
     collections::HashMap,
@@ -132,34 +131,6 @@ fn configure_firewall(config: &mut SysConfig) {
         )
         .unwrap()
         .wait();
-    }
-}
-
-fn get_interface_and_ip() -> Interface {
-    let ip_a_stdout = exec_cmd("ip", &["a"], false)
-        .unwrap()
-        .wait_with_output()
-        .unwrap()
-        .stdout;
-    let ip_a_str = String::from_utf8_lossy(&ip_a_stdout);
-    loop {
-        println!("{}", &ip_a_str);
-        print!("Select internet interface: ");
-        let _ = stdout().flush();
-        let mut interface_name = String::new();
-        stdin().read_line(&mut interface_name).unwrap();
-        interface_name = interface_name.trim().to_owned();
-        match get_if_addrs()
-            .unwrap()
-            .into_iter()
-            .filter(|int| int.name.eq(&interface_name))
-            .next()
-        {
-            Some(ip) => {
-                return ip;
-            }
-            _ => continue,
-        }
     }
 }
 

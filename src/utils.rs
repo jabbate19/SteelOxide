@@ -8,6 +8,7 @@ use std::{
     path::Path,
     process::Child,
 };
+use get_if_addrs::{get_if_addrs, Interface};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SysConfig {
@@ -33,10 +34,14 @@ pub struct PfConfig {
     pub wan_ip: IpAddr,
     pub wan_subnet: String,
     pub wan_interface: String,
+    pub dmz_ip: Option<IpAddr>,
+    pub dmz_subnet: Option<String>,
+    pub dmz_interface: Option<String>,
     pub permissions: Vec<Permissions>,
     pub users: Vec<String>,
 }
 
+#[derive(Debug)]
 pub struct ADUserInfo {
     pub name: String,
     pub display_name: String,
@@ -109,6 +114,7 @@ impl ADUserInfo {
         let all_users_str = String::from_utf8_lossy(&all_users_out);
         let all_users_split = all_users_str.split("\r\n\r\n");
         for user in all_users_split {
+            println!("AD User: {}", user);
             match ADUserInfo::new(user.to_owned()) {
                 Some(ad_user) => {
                     out.push(ad_user);
@@ -131,6 +137,7 @@ impl ADUserInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct LocalUserInfo {
     pub name: String,
     pub full_name: String,
@@ -154,33 +161,46 @@ impl LocalUserInfo {
         let fields_str = String::from_utf8_lossy(&fields_out);
         let fields_split = fields_str.split("\r\n");
         for field in fields_split {
-            let (key, val) = match field.split_once("  ") {
+            let (k, v) = match field.split_once("  ") {
                 Some(key_val) => key_val,
-                None => continue,
+                None => {
+                    continue;
+                },
             };
-            match key.trim() {
+            let key = k.to_owned().trim().to_owned();
+            let val = v.to_owned().trim().to_owned();
+            let trimmed = key.trim();
+            match trimmed {
                 "User name" => {
-                    out.name = val.trim().to_owned();
+                    out.name = val;
                 }
-                "Full name" => {
-                    out.full_name = val.trim().to_owned();
+                "Full Name" => {
+                    out.full_name = val;
                 }
-                "Account Active" => {
-                    out.enabled = val.trim() == "Yes";
+                "Account active" => {
+                    out.enabled = val == "Yes";
                 }
                 "Local Group Memberships" => {
                     let group_strings = val.split('*');
                     for group in group_strings {
-                        out.groups.push(group.trim().to_owned());
+                        let group_trimmed = group.trim().to_owned();
+                        if group_trimmed.len() != 0 {
+                            out.groups.push(group_trimmed);
+                        }
                     }
                 }
                 "Global Group Memberships" => {
                     let group_strings = val.split('*');
                     for group in group_strings {
-                        out.groups.push(group.trim().to_owned());
+                        let group_trimmed = group.trim().to_owned();
+                        if group_trimmed.len() != 0 {
+                            out.groups.push(group_trimmed);
+                        }
                     }
                 }
-                _ => {}
+                _ => {
+
+                }
             }
         }
         Some(out)
@@ -204,7 +224,8 @@ impl LocalUserInfo {
         let all_users_str = String::from_utf8_lossy(&all_users_out);
         let all_users_split = all_users_str.split("\r\n");
         for user in all_users_split {
-            match LocalUserInfo::new(user.to_owned()) {
+            println!("Local User: {}", user);
+            match LocalUserInfo::new(user.trim().to_owned()) {
                 Some(local_user) => {
                     out.push(local_user);
                 }
@@ -493,4 +514,27 @@ where
 {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
+}
+
+pub fn get_interface_and_ip() -> Interface {
+    loop {
+        let mut interfaces: Vec<Interface> = get_if_addrs().unwrap().into_iter().collect();
+        let mut i = 0;
+        for interface in &interfaces {
+            println!("{}) {} => {}", i, &interface.name, &interface.ip());
+            i += 1;
+        }
+        print!("Select internet interface number: ");
+        let _ = stdout().flush();
+        let mut interface_id = String::new();
+        stdin().read_line(&mut interface_id).unwrap();
+        let selected_id: usize = match interface_id.trim().parse() {
+            Ok(id) => id,
+            Err(x) => {
+                println!("{}", x);
+                continue;
+            },
+        };
+        return interfaces.remove(selected_id);
+    }
 }
