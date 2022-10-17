@@ -37,6 +37,7 @@ pub struct PfConfig {
     pub dmz_ip: Option<IpAddr>,
     pub dmz_subnet: Option<String>,
     pub dmz_interface: Option<String>,
+    pub version: Option<String>,
     pub permissions: Vec<Permissions>,
     pub users: Vec<String>,
 }

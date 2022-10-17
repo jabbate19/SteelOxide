@@ -214,18 +214,11 @@ fn configure_firewall(config: &mut PfConfig) {
     let _ = exec_cmd("pfctl", &["-f", "/etc/pf.conf"], false);
 }
 
-fn verify_web_config() {
+fn get_version(config: &mut PfConfig) {
     let versions = [
         "2_6_0", "2_5_2", "2_5_1", "2_5_0", "2_4_5", "2_4_4", "2_4_3", "2_4_2", "2_4_1", "2_4_0",
         "2_3_5", "2_3_4", "2_3_3", "2_3_2", "2_3_1", "2_3_0", "2_2", "2_1", "2_0", "1_2",
     ];
-
-    let hashes = reqwest::blocking::get(
-        "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/pfsense_webconfig.json"
-    )
-    .unwrap()
-    .json::<serde_json::Value>()
-    .unwrap();
 
     loop {
         println!(
@@ -247,54 +240,32 @@ fn verify_web_config() {
         let mut version = String::new();
         stdin().read_line(&mut version).unwrap();
         if versions.contains(&&version[..]) {
-            check_hashes_find_files(&Path::new("/usr/local/www"), hashes.get(&version).unwrap());
-            check_hashes_check_files(&Path::new("/usr/local/www"), hashes.get(&version).unwrap());
-            break;
+            config.version = Some(version);
         } else if version == "N/A" {
             break;
         }
     }
 }
 
-fn verity_etc_files() {
-    let versions = [
-        "2_6_0", "2_5_2", "2_5_1", "2_5_0", "2_4_5", "2_4_4", "2_4_3", "2_4_2", "2_4_1", "2_4_0",
-        "2_3_5", "2_3_4", "2_3_3", "2_3_2", "2_3_1", "2_3_0", "2_2", "2_1", "2_0", "1_2",
-    ];
+fn verify_web_config(config: &PfConfig) {
+    let hashes = reqwest::blocking::get(
+        "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/pfsense_webconfig.json"
+    )
+    .unwrap()
+    .json::<serde_json::Value>()
+    .unwrap();
+    check_hashes_find_files(&Path::new("/usr/local/www"), hashes.get(&config.version.as_ref().unwrap()).unwrap());
+    check_hashes_check_files(&Path::new("/usr/local/www"), hashes.get(&config.version.as_ref().unwrap()).unwrap());
+}
 
+fn verity_etc_files(config: &PfConfig) {
     let hashes = reqwest::blocking::get(
         "https://raw.githubusercontent.com/jabbate19/BlueTeamRust/master/data/pfsense_etc.json",
     )
     .unwrap()
     .json::<serde_json::Value>()
     .unwrap();
-
-    loop {
-        println!(
-            "Version: {}",
-            match read_to_string("/etc/version") {
-                Ok(version) => version,
-                Err(_) => String::from("Error getting Version"),
-            }
-        );
-        println!(
-            "Patch: {}",
-            match read_to_string("/etc/version.patch") {
-                Ok(patch) => patch,
-                Err(_) => String::from("Error getting Patch"),
-            }
-        );
-        print!("Provide pfSense Version, or N/A for Other: ");
-        let _ = stdout().flush();
-        let mut version = String::new();
-        stdin().read_line(&mut version).unwrap();
-        if versions.contains(&&version[..]) {
-            check_hashes_check_files(&Path::new("/etc"), hashes.get(&version).unwrap());
-            break;
-        } else if version == "N/A" {
-            break;
-        }
-    }
+    check_hashes_check_files(&Path::new("/etc"), hashes.get(&config.version.as_ref().unwrap()).unwrap());
 }
 
 fn check_hashes_find_files(dir: &Path, hashes: &Value) {
@@ -388,13 +359,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         dmz_ip: None,
         dmz_subnet: None,
         dmz_interface: None,
+        version: None,
         permissions: Vec::new(),
         users: Vec::new(),
     };
     configure_firewall(&mut config);
-    verify_web_config();
-    verity_etc_files();
     audit_users(&mut config);
+    get_version(&mut config);
+    verify_web_config(&config);
+    verity_etc_files(&config);
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),
