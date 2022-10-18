@@ -1,4 +1,9 @@
-use crate::utils::{config::SysConfig, tools::{exec_cmd, verify_config}, user::UserInfo};
+use crate::os::setup;
+use crate::utils::{
+    config::SysConfig,
+    tools::{exec_cmd, verify_config},
+    user::UserInfo,
+};
 use log::{debug, error, info, warn};
 use std::fs::File;
 use std::io::BufReader;
@@ -185,7 +190,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reader = BufReader::new(file);
     let config: SysConfig = serde_json::from_reader(reader)?;
     if !verify_config(&config) {
-        panic!("Corrupted config.json, re-run setup");
+        setup::main().unwrap();
     }
     configure_firewall(&config);
     audit_users(&config);

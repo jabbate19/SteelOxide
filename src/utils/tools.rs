@@ -1,4 +1,5 @@
 use get_if_addrs::{get_if_addrs, Interface};
+use sha1::{Digest, Sha1};
 use std::process::{Command, Stdio};
 use std::{
     fs::File,
@@ -6,7 +7,6 @@ use std::{
     path::Path,
     process::Child,
 };
-use sha1::{Sha1, Digest};
 
 pub fn verify_config<T: std::fmt::Debug>(config: &T) -> bool {
     println!("{:?}", config);

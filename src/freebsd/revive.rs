@@ -1,13 +1,14 @@
+use crate::os::setup;
 use crate::utils::{
+    config::PfConfig,
     tools::{exec_cmd, sha1sum, verify_config, yes_no},
-    config::{PfConfig},
     user::UserInfo,
 };
 use log::{error, info, warn};
 use serde_json::Value;
 use std::env;
-use std::fs::File;
 use std::fs;
+use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
@@ -156,18 +157,16 @@ fn check_hashes_find_files(dir: &Path, hashes: &Value) {
     let all_files = String::from_utf8_lossy(&all_files_stdout);
     for file in all_files.split("\n") {
         match hashes.get(file) {
-            Some(known_hash) => {
-                match sha1sum(file.to_string()) {
-                    Ok(new_hash) => {
-                        if known_hash.as_str().unwrap().to_owned() != new_hash {
-                            warn!("Hash for {} does not match key!", file);
-                        }
-                    },
-                    Err(_) => {
-                        error!("Failed to sha1sum {}", file);
+            Some(known_hash) => match sha1sum(file.to_string()) {
+                Ok(new_hash) => {
+                    if known_hash.as_str().unwrap().to_owned() != new_hash {
+                        warn!("Hash for {} does not match key!", file);
                     }
                 }
-            }
+                Err(_) => {
+                    error!("Failed to sha1sum {}", file);
+                }
+            },
             None => {
                 warn!("{} does not exist in dictionary!", file);
             }
@@ -185,7 +184,7 @@ fn check_hashes_check_files(dir: &Path, hashes: &Value) {
                 if known_hash.as_str().unwrap().to_owned() != new_hash {
                     warn!("Hash for {} does not match key!", file);
                 }
-            },
+            }
             Err(_) => {
                 error!("Hash for {} had an error (Likely doesn't exist)!", file);
             }
@@ -228,7 +227,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reader = BufReader::new(file);
     let config: PfConfig = serde_json::from_reader(reader)?;
     if !verify_config(&config) {
-        panic!("Corrupted config.json, re-run setup");
+        setup::main().unwrap();
     }
     configure_firewall(&config);
     audit_users(&config);
