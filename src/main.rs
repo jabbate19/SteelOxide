@@ -92,25 +92,7 @@ fn main() {
             os::revive::main().unwrap()
         }
         Some("persistnt") => {
-            CombinedLogger::init(vec![
-                TermLogger::new(
-                    LevelFilter::Info,
-                    Config::default(),
-                    TerminalMode::Mixed,
-                    ColorChoice::Auto,
-                ),
-                WriteLogger::new(
-                    LevelFilter::Info,
-                    Config::default(),
-                    File::create(&format!(
-                        "steeloxide_persistnt_{}.log",
-                        dt.format("%Y_%m_%d_%H_%M_%S").to_string()
-                    ))
-                    .unwrap(),
-                ),
-            ])
-            .unwrap();
-            os::persistnt::main().unwrap()
+            todo!("This is not yet implemented!");
         }
         Some(x) => println!("Unknown Command: {}", x),
     };
