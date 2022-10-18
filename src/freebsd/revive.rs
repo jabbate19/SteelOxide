@@ -9,8 +9,9 @@ use serde_json::Value;
 use std::env;
 use std::fs;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 use std::path::Path;
+use clap::ArgMatches;
 
 fn configure_firewall(config: &PfConfig) {
     let mut output = String::from("block all\n");
@@ -119,11 +120,29 @@ fn verify_web_config(config: &PfConfig) {
     .unwrap();
     check_hashes_find_files(
         &Path::new("/usr/local/www"),
-        hashes.get(&config.version.as_ref().unwrap()).unwrap(),
+        &hashes,
+        match &config.version.as_ref() {
+            Some(version) => {
+                version.to_owned()
+            },
+            None => {
+                error!("Version is not available to verify files");
+                return;
+            }
+        }
     );
     check_hashes_check_files(
         &Path::new("/usr/local/www"),
-        hashes.get(&config.version.as_ref().unwrap()).unwrap(),
+        &hashes,
+        match &config.version.as_ref() {
+            Some(version) => {
+                version.to_owned()
+            },
+            None => {
+                error!("Version is not available to verify files");
+                return;
+            }
+        }
     );
 }
 
@@ -136,11 +155,20 @@ fn verity_etc_files(config: &PfConfig) {
     .unwrap();
     check_hashes_check_files(
         &Path::new("/etc"),
-        hashes.get(&config.version.as_ref().unwrap()).unwrap(),
+        &hashes,
+        match &config.version.as_ref() {
+            Some(version) => {
+                version.to_owned()
+            },
+            None => {
+                error!("Version is not available to verify files");
+                return;
+            }
+        }
     );
 }
 
-fn check_hashes_find_files(dir: &Path, hashes: &Value) {
+fn check_hashes_find_files(dir: &Path, hashes: &Value, version: &str) {
     let current_dir = env::current_dir().unwrap();
     env::set_current_dir(dir).unwrap();
     let all_files_cmd = exec_cmd("find", &[".", "-type", "f"], false)
@@ -155,12 +183,26 @@ fn check_hashes_find_files(dir: &Path, hashes: &Value) {
         }
     };
     let all_files = String::from_utf8_lossy(&all_files_stdout);
+    let hashes = hashes.get(version).unwrap();
     for file in all_files.split("\n") {
         match hashes.get(file) {
             Some(known_hash) => match sha1sum(file.to_string()) {
                 Ok(new_hash) => {
                     if known_hash.as_str().unwrap().to_owned() != new_hash {
                         warn!("Hash for {} does not match key!", file);
+                        let diff_cmd = exec_cmd("diff", &[file, &get_fixed_file(file.to_string(), version)], false)
+                        .unwrap()
+                        .wait_with_output()
+                        .unwrap();
+                        let diff_stdout = match diff_cmd.status.success() {
+                            true => diff_cmd.stdout,
+                            false => {
+                                error!("Failed to diff new and old files for {}", file);
+                                continue;
+                            }
+                        };
+                        let diff = String::from_utf8_lossy(&diff_stdout);
+                        warn!("{}", diff);
                     }
                 }
                 Err(_) => {
@@ -175,22 +217,55 @@ fn check_hashes_find_files(dir: &Path, hashes: &Value) {
     env::set_current_dir(&current_dir).unwrap();
 }
 
-fn check_hashes_check_files(dir: &Path, hashes: &Value) {
+fn check_hashes_check_files(dir: &Path, hashes: &Value, version: &str) {
     let current_dir = env::current_dir().unwrap();
     env::set_current_dir(dir).unwrap();
+    let hashes = hashes.get(version).unwrap();
     for (file, known_hash) in hashes.as_object().unwrap() {
         match sha1sum(file.to_string()) {
             Ok(new_hash) => {
                 if known_hash.as_str().unwrap().to_owned() != new_hash {
                     warn!("Hash for {} does not match key!", file);
+                    let diff_cmd = exec_cmd("diff", &[file, &get_fixed_file(file.to_string(), version)], false)
+                        .unwrap()
+                        .wait_with_output()
+                        .unwrap();
+                    let diff_stdout = match diff_cmd.status.success() {
+                        true => diff_cmd.stdout,
+                        false => {
+                            error!("Failed to diff new and old files for {}", file);
+                            continue;
+                        }
+                    };
+                    let diff = String::from_utf8_lossy(&diff_stdout);
+                    warn!("{}", diff);
                 }
             }
             Err(_) => {
                 error!("Hash for {} had an error (Likely doesn't exist)!", file);
+                error!("Putting replacement file in {}", get_fixed_file(file.to_string(), version));
             }
         }
     }
     env::set_current_dir(&current_dir).unwrap();
+}
+
+fn get_fixed_file(mut file: String, version: &str) -> String {
+    if ["2_2", "2_1", "2_0", "1_2"].contains(&&version[..]) {
+        file = format!("src/{}", file);
+    }
+    let git_version = format!("RELENG_{}", version);
+    let new_file_name = format!("new_{}", file.split('/').last().unwrap());
+    let hashes = reqwest::blocking::get(&format!(
+        "https://raw.githubusercontent.com/pfsense/pfsense/{}/{}",
+        git_version, file
+    ))
+    .unwrap()
+    .bytes()
+    .unwrap();
+    let mut out_file = File::open(&new_file_name).unwrap_or(File::create(&new_file_name).unwrap());
+    out_file.write(&hashes).unwrap();
+    new_file_name
 }
 
 fn audit_users(config: &PfConfig) {
@@ -222,7 +297,7 @@ fn audit_users(config: &PfConfig) {
     }
 }
 
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let default_path = "./config.json".to_owned();
     let file_path = cmd.get_one::<String>("config").unwrap_or(&default_path);
     let file = File::open(&file_path)?;

@@ -245,7 +245,7 @@ fn select_services(config: &SysConfig) {
     }
 }
 
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let default_path = "./config.json".to_owned();
     let file_path = cmd.get_one::<String>("config").unwrap_or(&default_path);
     let file = File::open(&file_path)?;
