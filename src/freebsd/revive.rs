@@ -1,4 +1,8 @@
-use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, Permissions, PfConfig, UserInfo};
+use crate::utils::{
+    config::{exec_cmd, get_interface_and_ip, yes_no},
+    config::{Permissions, PfConfig},
+    user::UserInfo,
+};
 use log::{error, info, warn};
 use rpassword::prompt_password;
 use serde_json::Value;

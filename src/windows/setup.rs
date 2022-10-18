@@ -1,4 +1,8 @@
-use crate::utils::{exec_cmd, get_interface_and_ip, yes_no, ADUserInfo, LocalUserInfo, SysConfig};
+use crate::utils::{
+    config::SysConfig,
+    tools::{exec_cmd, get_interface_and_ip, yes_no},
+    user::{ADUserInfo, LocalUserInfo},
+};
 use get_if_addrs::{get_if_addrs, Interface};
 use log::{debug, error, info, warn};
 use rpassword::prompt_password;

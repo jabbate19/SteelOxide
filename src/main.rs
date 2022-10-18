@@ -1,7 +1,6 @@
 use clap::{App, SubCommand};
 
 use chrono::prelude::*;
-use log::{error, info, warn};
 use simplelog::*;
 
 use std::fs::File;

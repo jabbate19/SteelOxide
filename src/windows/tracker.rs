@@ -1,4 +1,7 @@
-use crate::utils::{exec_cmd, yes_no, PIDInfo};
+use crate::utils::{
+    pid::PIDInfo,
+    tools::{exec_cmd, yes_no},
+};
 use log::{error, info, warn};
 use std::collections::HashSet;
 use std::fmt::Display;
