@@ -1,10 +1,10 @@
 use crate::os::setup;
-use clap::ArgMatches;
 use crate::utils::{
     config::SysConfig,
     tools::{exec_cmd, verify_config},
     user::UserInfo,
 };
+use clap::ArgMatches;
 use log::{debug, error, info, warn};
 use std::fs::File;
 use std::io::BufReader;

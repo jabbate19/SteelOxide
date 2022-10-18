@@ -1,4 +1,4 @@
-use clap::{App, SubCommand, Arg};
+use clap::{App, Arg, SubCommand};
 
 use chrono::prelude::*;
 use simplelog::*;
@@ -31,7 +31,10 @@ fn main() {
                 )
                 .about("Undo common service break tactics"),
         )
-        .subcommand(SubCommand::with_name("persistnt").about("(NOT IMPLEMENTED) Scan for persistence methods referring to a given file"))
+        .subcommand(
+            SubCommand::with_name("persistnt")
+                .about("(NOT IMPLEMENTED) Scan for persistence methods referring to a given file"),
+        )
         .get_matches();
 
     let dt = Local::now();
