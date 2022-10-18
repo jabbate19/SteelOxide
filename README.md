@@ -1,5 +1,5 @@
 # BlueTeamRust (SteelOxide)
-## A Blue Team Binary to Assist teams defend systems on Windows, Linux, and PfSense plattforms
+## A Blue Team Binary to Assist teams defend systems on Windows, Linux, and PfSense platforms
 
 # Features
 * User Auditing
