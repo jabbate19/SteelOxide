@@ -29,9 +29,9 @@ fn main() {
                         .takes_value(true)
                         .help("Provides a config file to revive to refer to"),
                 )
-                .about("Red Teamn't"),
+                .about("Undo common service break tactics"),
         )
-        .subcommand(SubCommand::with_name("persistnt").about("Scan for persistence"))
+        .subcommand(SubCommand::with_name("persistnt").about("(NOT IMPLEMENTED) Scan for persistence methods referring to a given file"))
         .get_matches();
 
     let dt = Local::now();
