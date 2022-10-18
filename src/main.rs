@@ -44,7 +44,7 @@ fn main() {
         Some(("setup", _)) => {
             CombinedLogger::init(vec![
                 TermLogger::new(
-                    LevelFilter::Info,
+                    LevelFilter::Debug,
                     Config::default(),
                     TerminalMode::Mixed,
                     ColorChoice::Auto,
@@ -65,7 +65,7 @@ fn main() {
         Some(("tracker", _)) => {
             CombinedLogger::init(vec![
                 TermLogger::new(
-                    LevelFilter::Info,
+                    LevelFilter::Debug,
                     Config::default(),
                     TerminalMode::Mixed,
                     ColorChoice::Auto,
@@ -86,7 +86,7 @@ fn main() {
         Some(("revive", cmd)) => {
             CombinedLogger::init(vec![
                 TermLogger::new(
-                    LevelFilter::Info,
+                    LevelFilter::Debug,
                     Config::default(),
                     TerminalMode::Mixed,
                     ColorChoice::Auto,

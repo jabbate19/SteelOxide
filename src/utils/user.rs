@@ -90,22 +90,30 @@ impl ADUserInfo {
     }
 
     pub fn shutdown(&self) {
-        if exec_cmd("net", &["user", "/domain", &self.name, "/active:no"], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if exec_cmd(
+            "C:\\Windows\\System32\\net.exe",
+            &["user", "/domain", &self.name, "/active:no"],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to disable domain user {}", &self.name);
         };
     }
 
     pub fn change_password(&self, password: &str) {
-        if !exec_cmd("net", &["user", "/domain", &self.name, password], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if !exec_cmd(
+            "C:\\Windows\\System32\\net.exe",
+            &["user", "/domain", &self.name, password],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to change domain user {} password!", &self.name);
         }
@@ -128,7 +136,7 @@ impl LocalUserInfo {
             enabled: false,
             groups: Vec::new(),
         };
-        let fields_cmd = exec_cmd("net", &["user", &name], false)
+        let fields_cmd = exec_cmd("C:\\Windows\\System32\\net.exe", &["user", &name], false)
             .unwrap()
             .wait_with_output()
             .unwrap();
@@ -230,22 +238,30 @@ impl LocalUserInfo {
     }
 
     pub fn change_password(&self, password: &str) {
-        if !exec_cmd("net", &["user", &self.name, password], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if !exec_cmd(
+            "C:\\Windows\\System32\\net.exe",
+            &["user", &self.name, password],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to reset local user {} password", &self.name);
         }
     }
 
     pub fn shutdown(&self) {
-        if !exec_cmd("net", &["user", &self.name, "/active:no"], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if !exec_cmd(
+            "C:\\Windows\\System32\\net.exe",
+            &["user", &self.name, "/active:no"],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to disable local user {}", &self.name);
         }
@@ -294,7 +310,7 @@ impl UserInfo {
 
     #[cfg(target_os = "linux")]
     pub fn shutdown(&self) {
-        if !exec_cmd("usermod", &["-L", &self.username], false)
+        if !exec_cmd("/usr/sbin/usermod", &["-L", &self.username], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -302,27 +318,39 @@ impl UserInfo {
         {
             error!("Failed to lock user {} password", &self.username);
         };
-        if !exec_cmd("usermod", &["-s", "/bin/false", &self.username], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if !exec_cmd(
+            "/usr/sbin/usermod",
+            &["-s", "/bin/false", &self.username],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to lock user {} shell", &self.username);
         }
-        if !exec_cmd("gpasswd", &["--delete", &self.username, "sudo"], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if !exec_cmd(
+            "/usr/bin/gpasswd",
+            &["--delete", &self.username, "sudo"],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to remove sudo from user {}", &self.username);
         }
-        if !exec_cmd("gpasswd", &["--delete", &self.username, "wheel"], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if !exec_cmd(
+            "/usr/bin/gpasswd",
+            &["--delete", &self.username, "wheel"],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to remove wheel from user {}", &self.username);
         }
@@ -330,7 +358,7 @@ impl UserInfo {
 
     #[cfg(target_os = "freebsd")]
     pub fn shutdown(&self) {
-        if !exec_cmd("pw", &["lock", &self.username], false)
+        if !exec_cmd("/usr/sbin/pw", &["lock", &self.username], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -339,7 +367,7 @@ impl UserInfo {
             error!("Failed to lock user {} password", &self.username);
         }
         if !exec_cmd(
-            "pw",
+            "/usr/sbin/pw",
             &["usermod", "-s", "/bin/false", &self.username],
             false,
         )
@@ -350,7 +378,7 @@ impl UserInfo {
         {
             error!("Failed to lock user {} shell", &self.username);
         }
-        if !exec_cmd("pw", &["wheel", "-d", &self.username], false)
+        if !exec_cmd("/usr/sbin/pw", &["wheel", "-d", &self.username], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -361,7 +389,7 @@ impl UserInfo {
     }
 
     pub fn change_password(&self, password: &str) {
-        let mut proc = exec_cmd("passwd", &[&self.username], true).unwrap();
+        let mut proc = exec_cmd("/usr/bin/passwd", &[&self.username], true).unwrap();
         proc.stdin
             .as_ref()
             .unwrap()

@@ -76,16 +76,20 @@ fn configure_firewall(config: &mut SysConfig) {
         }
     }
     debug!("Resetting Firewall and deleting old rules");
-    if !exec_cmd("netsh", &["advfirewall", "reset"], false)
-        .unwrap()
-        .wait()
-        .unwrap()
-        .success()
+    if !exec_cmd(
+        "C:\\Windows\\System32\\netsh.exe",
+        &["advfirewall", "reset"],
+        false,
+    )
+    .unwrap()
+    .wait()
+    .unwrap()
+    .success()
     {
         error!("Failed to reset firewall!");
     };
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &["advfirewall", "set", "allprofiles", "state", "on"],
         false,
     )
@@ -97,7 +101,7 @@ fn configure_firewall(config: &mut SysConfig) {
         error!("Failed to turn on firewalls!");
     };
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &["advfirewall", "firewall", "delete", "rule", "name=all"],
         false,
     )
@@ -111,7 +115,7 @@ fn configure_firewall(config: &mut SysConfig) {
     info!("Firewall has been wiped");
     debug!("Adding New Rules");
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &[
             "advfirewall",
             "set",
@@ -128,7 +132,7 @@ fn configure_firewall(config: &mut SysConfig) {
         error!("Failed to block firewall in/out!");
     };
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &[
             "advfirewall",
             "firewall",
@@ -150,7 +154,7 @@ fn configure_firewall(config: &mut SysConfig) {
     info!("Added ICMP Rule");
     for port in &config.ports {
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -172,7 +176,7 @@ fn configure_firewall(config: &mut SysConfig) {
             error!("Failed to add allow in tcp port {}!", port);
         };
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -194,7 +198,7 @@ fn configure_firewall(config: &mut SysConfig) {
             error!("Failed to add allow out tcp port {}!", port);
         };
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -216,7 +220,7 @@ fn configure_firewall(config: &mut SysConfig) {
             error!("Failed to add allow in udp port {}!", port);
         };
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -332,10 +336,14 @@ fn select_services(config: &mut SysConfig) {
 }
 
 fn scheduled_tasks() {
-    let schtasks_cmd = exec_cmd("schtasks", &["/query", "/fo", "csv"], false)
-        .unwrap()
-        .wait_with_output()
-        .unwrap();
+    let schtasks_cmd = exec_cmd(
+        "C:\\Windows\\System32\\schtasks.exe",
+        &["/query", "/fo", "csv"],
+        false,
+    )
+    .unwrap()
+    .wait_with_output()
+    .unwrap();
     let schtasks_out = match schtasks_cmd.status.success() {
         true => schtasks_cmd.stdout,
         false => {
@@ -345,11 +353,15 @@ fn scheduled_tasks() {
     };
     let schtasks_str = String::from_utf8_lossy(&schtasks_out);
     fs::write("schtasks.csv", format!("{}", schtasks_str)).unwrap();
-    if !exec_cmd("schtasks", &["/delete", "/tn", "*", "/f"], false)
-        .unwrap()
-        .wait()
-        .unwrap()
-        .success()
+    if !exec_cmd(
+        "C:\\Windows\\System32\\schtasks.exe",
+        &["/delete", "/tn", "*", "/f"],
+        false,
+    )
+    .unwrap()
+    .wait()
+    .unwrap()
+    .success()
     {
         error!("Failed to delete all tasks!");
         return;
@@ -360,7 +372,7 @@ fn scheduled_tasks() {
 fn download_sysinternals() {
     debug!("Downloading sysinternals...");
     if !exec_cmd(
-        "curl",
+        "C:\\Windows\\System32\\curl.exe",
         &[
             "https://download.sysinternals.com/files/SysinternalsSuite.zip",
             "-o",

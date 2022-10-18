@@ -215,7 +215,7 @@ fn configure_firewall(config: &mut PfConfig) {
         ));
         info!("Blocking SSH to Router");
         if yes_no("In that case, want me to just kill SSH all together?".to_owned()) {
-            let sshd_chmod = exec_cmd("chmod", &["444", "/etc/sshd"], false)
+            let sshd_chmod = exec_cmd("/bin/chmod", &["444", "/etc/sshd"], false)
                 .unwrap()
                 .wait()
                 .unwrap();
@@ -240,13 +240,13 @@ fn configure_firewall(config: &mut PfConfig) {
     ));
     info!("Added rules for webconfig");
 
-    let cp_old = exec_cmd("cp", &["/etc/pf.conf", "/root/old_pf.conf"], false)
+    let cp_old = exec_cmd("/bin/cp", &["/etc/pf.conf", "/root/old_pf.conf"], false)
         .unwrap()
         .wait()
         .unwrap();
     if cp_old.success() {
         fs::write("/etc/pf.conf", output).unwrap();
-        let set_rules = exec_cmd("pfctl", &["-f", "/etc/pf.conf"], false)
+        let set_rules = exec_cmd("/sbin/pfctl", &["-f", "/etc/pf.conf"], false)
             .unwrap()
             .wait()
             .unwrap();
@@ -318,7 +318,7 @@ fn audit_users(config: &mut PfConfig) {
             }
         }
         user.change_password(&password);
-        let cron_cmd = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
+        let cron_cmd = exec_cmd("/usr/bin/crontab", &["-u", &user.username, "-l"], false)
             .unwrap()
             .wait_with_output()
             .unwrap();

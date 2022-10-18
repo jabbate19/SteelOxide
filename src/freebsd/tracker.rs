@@ -58,7 +58,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     create_dir("./quarantine")?;
     let mut safe: HashSet<Socket> = HashSet::new();
     loop {
-        let ss = exec_cmd("sockstat", &[], false)
+        let ss = exec_cmd("/usr/bin/sockstat", &[], false)
             .unwrap()
             .wait_with_output()
             .unwrap();

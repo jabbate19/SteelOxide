@@ -11,16 +11,20 @@ use std::io::BufReader;
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");
-    if !exec_cmd("netsh", &["advfirewall", "reset"], false)
-        .unwrap()
-        .wait()
-        .unwrap()
-        .success()
+    if !exec_cmd(
+        "C:\\Windows\\System32\\netsh.exe",
+        &["advfirewall", "reset"],
+        false,
+    )
+    .unwrap()
+    .wait()
+    .unwrap()
+    .success()
     {
         error!("Failed to reset firewall!");
     };
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &["advfirewall", "set", "allprofiles", "state", "on"],
         false,
     )
@@ -32,7 +36,7 @@ fn configure_firewall(config: &SysConfig) {
         error!("Failed to turn on firewalls!");
     };
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &["advfirewall", "firewall", "delete", "rule", "name=all"],
         false,
     )
@@ -46,7 +50,7 @@ fn configure_firewall(config: &SysConfig) {
     info!("Firewall has been wiped");
     debug!("Adding New Rules");
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &[
             "advfirewall",
             "set",
@@ -63,7 +67,7 @@ fn configure_firewall(config: &SysConfig) {
         error!("Failed to block firewall in/out!");
     };
     if !exec_cmd(
-        "netsh",
+        "C:\\Windows\\System32\\netsh.exe",
         &[
             "advfirewall",
             "firewall",
@@ -85,7 +89,7 @@ fn configure_firewall(config: &SysConfig) {
     info!("Added ICMP Rule");
     for port in &config.ports {
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -107,7 +111,7 @@ fn configure_firewall(config: &SysConfig) {
             error!("Failed to add allow in tcp port {}!", port);
         };
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -129,7 +133,7 @@ fn configure_firewall(config: &SysConfig) {
             error!("Failed to add allow out tcp port {}!", port);
         };
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -151,7 +155,7 @@ fn configure_firewall(config: &SysConfig) {
             error!("Failed to add allow in udp port {}!", port);
         };
         if !exec_cmd(
-            "netsh",
+            "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
                 "firewall",
@@ -239,16 +243,17 @@ fn select_services(config: &SysConfig) {
         let service_status = match service_status_cmd.status.success() {
             true => {
                 let stdout = service_status_cmd.stdout;
-                String::from_utf8_lossy(stdout);
-            },
+                String::from_utf8_lossy(stdout)
+            }
             false => {
                 error!("Failed to get service {} status", service);
                 continue;
             }
-        }
-        if service_status.trim() != "Running" {
+        };
+        if service_status.trim() == "Running" {
             info!("Service {} is running...");
         } else {
+            warn!("Service {} is not running!");
             if !exec_cmd(
                 "powershell",
                 &[
@@ -268,7 +273,6 @@ fn select_services(config: &SysConfig) {
             };
             info!("Service {} will be maintained and kept alive", service);
         }
-        
     }
 }
 

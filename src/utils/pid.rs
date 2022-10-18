@@ -49,7 +49,7 @@ impl PIDInfo {
     }
 
     pub fn quarantine(&self) {
-        if !exec_cmd("mv", &[&self.exe, "./quarantine"], false)
+        if !exec_cmd("/bin/mv", &[&self.exe, "./quarantine"], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -57,7 +57,7 @@ impl PIDInfo {
         {
             error!("Failed to move exe {}", &self.exe);
         }
-        if !exec_cmd("chmod", &["444", &self.exe], false)
+        if !exec_cmd("/bin/chmod", &["444", &self.exe], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -71,7 +71,7 @@ impl PIDInfo {
 #[cfg(target_os = "freebsd")]
 impl PIDInfo {
     pub fn new(pid: u64) -> Option<PIDInfo> {
-        let exe_cmd = exec_cmd("procstat", &["-b", &pid.to_string()[..]], false)
+        let exe_cmd = exec_cmd("/usr/bin/procstat", &["-b", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
             .unwrap();
@@ -85,7 +85,7 @@ impl PIDInfo {
         let exe_full = String::from_utf8_lossy(&exe_stdout);
         let exe = exe_full.split_whitespace().last().unwrap();
 
-        let cwd_cmd = exec_cmd("procstat", &["pwdx", &pid.to_string()[..]], false)
+        let cwd_cmd = exec_cmd("/usr/bin/procstat", &["pwdx", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
             .unwrap();
@@ -99,7 +99,7 @@ impl PIDInfo {
         let cwd_full = String::from_utf8_lossy(&cwd_stdout);
         let cwd = cwd_full.split_whitespace().last().unwrap();
 
-        let cmdline_cmd = exec_cmd("procstat", &["pargs", &pid.to_string()[..]], false)
+        let cmdline_cmd = exec_cmd("/usr/bin/procstat", &["pargs", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
             .unwrap();
@@ -117,7 +117,7 @@ impl PIDInfo {
         }
         cmdline.remove(0);
 
-        let environ_cmd = exec_cmd("procstat", &["penv", &pid.to_string()[..]], false)
+        let environ_cmd = exec_cmd("/usr/bin/procstat", &["penv", &pid.to_string()[..]], false)
             .unwrap()
             .wait_with_output()
             .unwrap();
@@ -157,7 +157,7 @@ impl PIDInfo {
     }
 
     pub fn quarantine(&self) {
-        if !exec_cmd("mv", &[&self.exe, "./quarantine"], false)
+        if !exec_cmd("/bin/mv", &[&self.exe, "./quarantine"], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -165,7 +165,7 @@ impl PIDInfo {
         {
             error!("Failed to move exe {}", &self.exe);
         }
-        if !exec_cmd("chmod", &["444", &self.exe], false)
+        if !exec_cmd("/bin/chmod", &["444", &self.exe], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -223,11 +223,15 @@ impl PIDInfo {
     }
 
     pub fn terminate(&self) {
-        if !exec_cmd("taskkill", &["/PID", &self.pid.to_string(), "/F"], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
+        if !exec_cmd(
+            "C:\\Windows\\System32\\taskkill.exe",
+            &["/PID", &self.pid.to_string(), "/F"],
+            false,
+        )
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
         {
             error!("Failed to terminate PID {}", &self.exe);
         }

@@ -52,7 +52,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     create_dir("./quarantine")?;
     let mut safe: HashSet<Socket> = HashSet::new();
     loop {
-        let netstat = exec_cmd("netstat", &["-noq"], false)
+        let netstat = exec_cmd("C:\\Windows\\System32\\curl.exe", &["-noq"], false)
             .unwrap()
             .wait_with_output()
             .unwrap();

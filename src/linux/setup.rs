@@ -84,7 +84,7 @@ fn configure_firewall(config: &mut SysConfig) {
         }
     }
     debug!("Resetting Firewall and deleting old rules");
-    if !exec_cmd("iptables", &["-F"], false)
+    if !exec_cmd("/usr/sbin/iptables", &["-F"], false)
         .unwrap()
         .wait()
         .unwrap()
@@ -92,7 +92,7 @@ fn configure_firewall(config: &mut SysConfig) {
     {
         error!("Failed to flush iptables");
     };
-    if !exec_cmd("iptables", &["-t", "mangle", "-F"], false)
+    if !exec_cmd("/usr/sbin/iptables", &["-t", "mangle", "-F"], false)
         .unwrap()
         .wait()
         .unwrap()
@@ -100,7 +100,7 @@ fn configure_firewall(config: &mut SysConfig) {
     {
         error!("Failed to flush iptables mangle table");
     };
-    if !exec_cmd("iptables", &["-P", "INPUT", "DROP"], false)
+    if !exec_cmd("/usr/sbin/iptables", &["-P", "INPUT", "DROP"], false)
         .unwrap()
         .wait()
         .unwrap()
@@ -108,7 +108,7 @@ fn configure_firewall(config: &mut SysConfig) {
     {
         error!("Failed to set default iptables input to drop");
     };
-    if !exec_cmd("iptables", &["-P", "OUTPUT", "DROP"], false)
+    if !exec_cmd("/usr/sbin/iptables", &["-P", "OUTPUT", "DROP"], false)
         .unwrap()
         .wait()
         .unwrap()
@@ -116,7 +116,7 @@ fn configure_firewall(config: &mut SysConfig) {
     {
         error!("Failed to set default iptables output to drop");
     };
-    if !exec_cmd("iptables", &["-P", "FORWARD", "ACCEPT"], false)
+    if !exec_cmd("/usr/sbin/iptables", &["-P", "FORWARD", "ACCEPT"], false)
         .unwrap()
         .wait()
         .unwrap()
@@ -126,7 +126,7 @@ fn configure_firewall(config: &mut SysConfig) {
     };
     info!("Firewall has been wiped");
     if exec_cmd(
-        "iptables",
+        "/usr/sbin/iptables",
         &["-A", "INPUT", "-p", "imcp", "-j", "ACCEPT"],
         false,
     )
@@ -141,7 +141,7 @@ fn configure_firewall(config: &mut SysConfig) {
     }
     for port in &config.ports {
         if !exec_cmd(
-            "iptables",
+            "/usr/sbin/iptables",
             &["-A", "INPUT", "-p", "tcp", "--dport", &port, "-j", "ACCEPT"],
             false,
         )
@@ -154,7 +154,7 @@ fn configure_firewall(config: &mut SysConfig) {
             continue;
         }
         if !exec_cmd(
-            "iptables",
+            "/usr/sbin/iptables",
             &["-A", "INPUT", "-p", "udp", "--dport", &port, "-j", "ACCEPT"],
             false,
         )
@@ -167,7 +167,7 @@ fn configure_firewall(config: &mut SysConfig) {
             continue;
         }
         if !exec_cmd(
-            "iptables",
+            "/usr/sbin/iptables",
             &[
                 "-A", "OUTPUT", "-p", "tcp", "--sport", &port, "-j", "ACCEPT",
             ],
@@ -182,7 +182,7 @@ fn configure_firewall(config: &mut SysConfig) {
             continue;
         }
         if !exec_cmd(
-            "iptables",
+            "/usr/sbin/iptables",
             &[
                 "-A", "OUTPUT", "-p", "udp", "--sport", &port, "-j", "ACCEPT",
             ],
@@ -222,7 +222,7 @@ fn audit_users(config: &mut SysConfig) {
             }
         }
         user.change_password(&password);
-        let cron_cmd = exec_cmd("crontab", &["-u", &user.username, "-l"], false)
+        let cron_cmd = exec_cmd("/usr/bin/crontab", &["-u", &user.username, "-l"], false)
             .unwrap()
             .wait_with_output()
             .unwrap();
@@ -251,7 +251,7 @@ fn select_services(config: &mut SysConfig) {
         config.services.push(service);
     }
     for service in &config.services {
-        if !exec_cmd("systemctl", &["enable", &service], false)
+        if !exec_cmd("/usr/bin/systemctl", &["enable", &service], false)
             .unwrap()
             .wait()
             .unwrap()
@@ -260,7 +260,7 @@ fn select_services(config: &mut SysConfig) {
             error!("Failed to enable {}", service);
             continue;
         }
-        if !exec_cmd("systemctl", &["start", &service], false)
+        if !exec_cmd("/usr/bin/systemctl", &["start", &service], false)
             .unwrap()
             .wait()
             .unwrap()
