@@ -1,17 +1,12 @@
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, get_interface_and_ip, yes_no},
+    tools::{exec_cmd, yes_no},
     user::{ADUserInfo, LocalUserInfo},
 };
-use get_if_addrs::{get_if_addrs, Interface};
 use log::{debug, error, info, warn};
-use rpassword::prompt_password;
-use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
-use std::io::{stdin, stdout, Write};
-use std::net::{IpAddr, Ipv4Addr};
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");

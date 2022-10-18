@@ -3,10 +3,11 @@ use get_if_addrs::{get_if_addrs, Interface};
 use std::process::{Command, Stdio};
 use std::{
     fs::File,
-    io::{self, stdin, stdout, BufRead, Write},
+    io::{self, stdin, stdout, BufRead, BufReader, Read, Write},
     path::Path,
     process::Child,
 };
+use sha1::{Sha1, Digest};
 
 pub fn verify_config(config: SysConfig) -> bool {
     println!("{:?}", config);
@@ -72,4 +73,22 @@ pub fn yes_no(question: String) -> bool {
             _ => continue,
         }
     }
+}
+
+pub fn sha1sum(filepath: String) -> Result<String, Box<dyn std::error::Error>> {
+    let f = File::open(&filepath)?;
+    let mut reader = BufReader::new(f);
+    let mut buffer = Vec::new();
+
+    // Read file into vector.
+    reader.read_to_end(&mut buffer)?;
+
+    let mut hasher = Sha1::new();
+    hasher.update(&buffer);
+    let hexes = hasher.finalize();
+    let mut out = String::new();
+    for hex in hexes {
+        out.push_str(&format!("{:x?}", hex));
+    }
+    Ok(out)
 }

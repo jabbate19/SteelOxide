@@ -1,9 +1,8 @@
 use crate::utils::tools::exec_cmd;
 use log::error;
-use std::{
-    fmt::Display,
-    fs::{read_link, read_to_string},
-};
+use std::fmt::Display;
+#[cfg(target_os = "linux")]
+use std::fs::{read_link, read_to_string};
 
 pub struct PIDInfo {
     pub pid: u64,

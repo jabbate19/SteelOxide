@@ -86,6 +86,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+        } else {
+            error!("Failed to get Socket data");
         }
     }
 }

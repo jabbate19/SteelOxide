@@ -1,6 +1,6 @@
 use crate::utils::{
     config::{Permissions, PfConfig},
-    tools::{exec_cmd, get_interface_and_ip, yes_no},
+    tools::{exec_cmd, get_interface_and_ip, yes_no, sha1sum},
     user::UserInfo,
 };
 use log::{error, info, warn};
@@ -346,20 +346,15 @@ fn check_hashes_find_files(dir: &Path, hashes: &Value) {
     for file in all_files.split("\n") {
         match hashes.get(file) {
             Some(known_hash) => {
-                let new_hash_cmd = exec_cmd("sha1sum", &[file], false)
-                    .unwrap()
-                    .wait_with_output()
-                    .unwrap();
-                let new_hash_stdout = match new_hash_cmd.status.success() {
-                    true => new_hash_cmd.stdout,
-                    false => {
+                match sha1sum(file.to_string()) {
+                    Ok(new_hash) => {
+                        if known_hash.as_str().unwrap().to_owned() != new_hash {
+                            warn!("Hash for {} does not match key!", file);
+                        }
+                    },
+                    Err(_) => {
                         error!("Failed to sha1sum {}", file);
-                        continue;
                     }
-                };
-                let new_hash = String::from_utf8_lossy(&new_hash_stdout);
-                if known_hash != new_hash.split_whitespace().next().unwrap() {
-                    warn!("Hash for {} does not match key!", file);
                 }
             }
             None => {
@@ -374,18 +369,15 @@ fn check_hashes_check_files(dir: &Path, hashes: &Value) {
     let current_dir = env::current_dir().unwrap();
     env::set_current_dir(dir).unwrap();
     for (file, known_hash) in hashes.as_object().unwrap() {
-        let new_hash_cmd = exec_cmd("sha1sum", &[file], false)
-            .unwrap()
-            .wait_with_output()
-            .unwrap();
-        if new_hash_cmd.status.success() {
-            let new_hash_stdout = new_hash_cmd.stdout;
-            let new_hash = String::from_utf8_lossy(&new_hash_stdout);
-            if known_hash != new_hash.split_whitespace().next().unwrap() {
-                warn!("Hash for {} does not match key!", file);
+        match sha1sum(file.to_string()) {
+            Ok(new_hash) => {
+                if known_hash.as_str().unwrap().to_owned() != new_hash {
+                    warn!("Hash for {} does not match key!", file);
+                }
+            },
+            Err(_) => {
+                error!("Hash for {} had an error (Likely doesn't exist)!", file);
             }
-        } else {
-            error!("Hash for {} had an error (Likely doesn't exist)!", file);
         }
     }
     env::set_current_dir(&current_dir).unwrap();
