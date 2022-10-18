@@ -1,6 +1,6 @@
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, yes_no},
+    tools::{exec_cmd, verify_config, yes_no},
     user::{ADUserInfo, LocalUserInfo},
 };
 use log::{debug, error, info, warn};
@@ -248,6 +248,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open("./config.json")?;
     let reader = BufReader::new(file);
     let config: SysConfig = serde_json::from_reader(reader)?;
+    if !verify_config(&config) {
+        panic!("Corrupted config.json, re-run setup");
+    }
     configure_firewall(&config);
     //let password = prompt_password("Enter password for valid users: ").unwrap();
     audit_local_users(&config);

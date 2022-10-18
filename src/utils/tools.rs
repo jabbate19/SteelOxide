@@ -1,4 +1,3 @@
-use crate::utils::config::SysConfig;
 use get_if_addrs::{get_if_addrs, Interface};
 use std::process::{Command, Stdio};
 use std::{
@@ -9,7 +8,7 @@ use std::{
 };
 use sha1::{Sha1, Digest};
 
-pub fn verify_config(config: SysConfig) -> bool {
+pub fn verify_config<T: std::fmt::Debug>(config: &T) -> bool {
     println!("{:?}", config);
     yes_no("Config Ok".to_owned())
 }

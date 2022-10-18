@@ -1,5 +1,5 @@
 use crate::utils::{
-    tools::{exec_cmd, yes_no, sha1sum},
+    tools::{exec_cmd, sha1sum, verify_config, yes_no},
     config::{PfConfig},
     user::UserInfo,
 };
@@ -227,6 +227,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open("./config.json")?;
     let reader = BufReader::new(file);
     let config: PfConfig = serde_json::from_reader(reader)?;
+    if !verify_config(&config) {
+        panic!("Corrupted config.json, re-run setup");
+    }
     configure_firewall(&config);
     audit_users(&config);
     verify_web_config(&config);
