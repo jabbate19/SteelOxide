@@ -549,7 +549,7 @@ impl PIDInfo {
         }
         environ.remove(0);
 
-        Ok(PIDInfo {
+        Some(PIDInfo {
             pid,
             exe: exe.to_string(), // -b
             root: String::from("N/A"),

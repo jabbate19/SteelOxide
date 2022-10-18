@@ -149,7 +149,7 @@ fn check_hashes_find_files(dir: &Path, hashes: &Value) {
     let all_files_stdout = match all_files_cmd.status.success() {
         true => all_files_cmd.stdout,
         false => {
-            error!("Failed to recursively find all files in {}", dir);
+            error!("Failed to recursively find all files in {}", dir.display());
             return;
         }
     };

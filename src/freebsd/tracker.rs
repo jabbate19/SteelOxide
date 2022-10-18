@@ -70,8 +70,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", sock);
                     println!("{}", pid);
                     if yes_no("Keep socket".to_string()) {
-                        safe.insert(sock);
                         info!("{} kept", sock);
+                        safe.insert(sock);
                     } else {
                         pid.terminate();
                         warn!("{} was found to be malicious!", sock);

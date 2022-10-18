@@ -334,7 +334,7 @@ fn check_hashes_find_files(dir: &Path, hashes: &Value) {
     let all_files_stdout = match all_files_cmd.status.success() {
         true => all_files_cmd.stdout,
         false => {
-            error!("Failed to recursively find all files in {}", dir);
+            error!("Failed to recursively find all files in {}", dir.display());
             return;
         }
     };
@@ -402,10 +402,10 @@ fn audit_users(config: &mut PfConfig) {
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
-                info!("Local User {} was found and kept", user.name);
+                info!("Local User {} was found and kept", user.username);
             } else {
                 user.shutdown();
-                info!("Local User {} was found and disabled", user.name);
+                info!("Local User {} was found and disabled", user.username);
             }
         }
         user.change_password(&password);
@@ -417,6 +417,7 @@ fn audit_users(config: &mut PfConfig) {
             true => cron_cmd.stdout,
             false => {
                 error!("Failed to get cron jobs for {}", user.username);
+                continue;
             }
         };
         let cron_str = String::from_utf8_lossy(&cron_stdout).to_string();
