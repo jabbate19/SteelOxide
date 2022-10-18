@@ -224,24 +224,51 @@ fn audit_ad_users(config: &SysConfig) {
 
 fn select_services(config: &SysConfig) {
     for service in &config.services {
-        if !exec_cmd(
+        let service_status_cmd = exec_cmd(
             "powershell",
             &[
                 "-ExecutionPolicy",
                 "Bypass",
-                &format!("Start-Service -Name {}", service),
+                &format!("(Get-Service -Name {}).status", service),
             ],
             false,
         )
         .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to start service {}", service);
-            continue;
-        };
-        info!("Service {} will be maintained and kept alive", service);
+        .wait_with_output()
+        .unwrap();
+        let service_status = match service_status_cmd.status.success() {
+            true => {
+                let stdout = service_status_cmd.stdout;
+                String::from_utf8_lossy(stdout);
+            },
+            false => {
+                error!("Failed to get service {} status", service);
+                continue;
+            }
+        }
+        if service_status.trim() != "Running" {
+            info!("Service {} is running...");
+        } else {
+            if !exec_cmd(
+                "powershell",
+                &[
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    &format!("Start-Service -Name {}", service),
+                ],
+                false,
+            )
+            .unwrap()
+            .wait()
+            .unwrap()
+            .success()
+            {
+                error!("Failed to start service {}", service);
+                continue;
+            };
+            info!("Service {} will be maintained and kept alive", service);
+        }
+        
     }
 }
 

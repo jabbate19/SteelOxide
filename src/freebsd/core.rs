@@ -2,11 +2,11 @@ use crate::utils::{
     config::PfConfig,
     tools::{exec_cmd, sha1sum},
 };
+use log::{error, warn};
 use serde_json::Value;
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use log::{error, warn};
 use std::path::Path;
 
 pub fn verify_web_config(config: &PfConfig) {
@@ -20,27 +20,23 @@ pub fn verify_web_config(config: &PfConfig) {
         &Path::new("/usr/local/www"),
         &hashes,
         match &config.version.as_ref() {
-            Some(version) => {
-                version.to_owned()
-            },
+            Some(version) => version.to_owned(),
             None => {
                 error!("Version is not available to verify files");
                 return;
             }
-        }
+        },
     );
     check_hashes_check_files(
         &Path::new("/usr/local/www"),
         &hashes,
         match &config.version.as_ref() {
-            Some(version) => {
-                version.to_owned()
-            },
+            Some(version) => version.to_owned(),
             None => {
                 error!("Version is not available to verify files");
                 return;
             }
-        }
+        },
     );
 }
 
@@ -55,14 +51,12 @@ pub fn verity_etc_files(config: &PfConfig) {
         &Path::new("/etc"),
         &hashes,
         match &config.version.as_ref() {
-            Some(version) => {
-                version.to_owned()
-            },
+            Some(version) => version.to_owned(),
             None => {
                 error!("Version is not available to verify files");
                 return;
             }
-        }
+        },
     );
 }
 
@@ -88,7 +82,11 @@ pub fn check_hashes_find_files(dir: &Path, hashes: &Value, version: &str) {
                 Ok(new_hash) => {
                     if known_hash.as_str().unwrap().to_owned() != new_hash {
                         warn!("Hash for {} does not match key!", file);
-                        let diff_cmd = exec_cmd("diff", &[file, &get_fixed_file(file.to_string(), version)], false)
+                        let diff_cmd = exec_cmd(
+                            "diff",
+                            &[file, &get_fixed_file(file.to_string(), version)],
+                            false,
+                        )
                         .unwrap()
                         .wait_with_output()
                         .unwrap();
@@ -124,10 +122,14 @@ pub fn check_hashes_check_files(dir: &Path, hashes: &Value, version: &str) {
             Ok(new_hash) => {
                 if known_hash.as_str().unwrap().to_owned() != new_hash {
                     warn!("Hash for {} does not match key!", file);
-                    let diff_cmd = exec_cmd("diff", &[file, &get_fixed_file(file.to_string(), version)], false)
-                        .unwrap()
-                        .wait_with_output()
-                        .unwrap();
+                    let diff_cmd = exec_cmd(
+                        "diff",
+                        &[file, &get_fixed_file(file.to_string(), version)],
+                        false,
+                    )
+                    .unwrap()
+                    .wait_with_output()
+                    .unwrap();
                     let diff_stdout = match diff_cmd.status.success() {
                         true => diff_cmd.stdout,
                         false => {
@@ -141,7 +143,10 @@ pub fn check_hashes_check_files(dir: &Path, hashes: &Value, version: &str) {
             }
             Err(_) => {
                 error!("Hash for {} had an error (Likely doesn't exist)!", file);
-                error!("Putting replacement file in {}", get_fixed_file(file.to_string(), version));
+                error!(
+                    "Putting replacement file in {}",
+                    get_fixed_file(file.to_string(), version)
+                );
             }
         }
     }

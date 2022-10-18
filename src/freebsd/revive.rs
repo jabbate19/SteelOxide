@@ -1,15 +1,15 @@
+use crate::os::core::{verify_web_config, verity_etc_files};
 use crate::os::setup;
 use crate::utils::{
     config::PfConfig,
     tools::{exec_cmd, verify_config, yes_no},
     user::UserInfo,
 };
-use crate::os::core::{verify_web_config, verity_etc_files};
+use clap::ArgMatches;
 use log::{error, info, warn};
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
-use clap::ArgMatches;
 
 fn configure_firewall(config: &PfConfig) {
     let mut output = String::from("block all\n");

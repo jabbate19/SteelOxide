@@ -1,3 +1,4 @@
+use crate::os::core::{verify_web_config, verity_etc_files};
 use crate::utils::{
     config::{Permissions, PfConfig},
     tools::{exec_cmd, get_interface_and_ip, yes_no},
@@ -6,7 +7,6 @@ use crate::utils::{
 use log::{error, info, warn};
 use rpassword::prompt_password;
 use std::collections::HashMap;
-use crate::os::core::{verify_web_config, verity_etc_files};
 use std::fs::{self, read_to_string};
 use std::io::{stdin, stdout, Write};
 use std::net::{IpAddr, Ipv4Addr};

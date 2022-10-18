@@ -158,25 +158,35 @@ fn audit_users(config: &SysConfig) {
 
 fn select_services(config: &SysConfig) {
     for service in &config.services {
-        if !exec_cmd("systemctl", &["enable", &service], false)
+        if !exec_cmd("service", &[&service, "status"], false)
             .unwrap()
             .wait()
             .unwrap()
             .success()
         {
-            error!("Failed to enable {}", service);
-            continue;
+            warn!("Service {} is not running!", service);
+            if !exec_cmd("systemctl", &["enable", &service], false)
+                .unwrap()
+                .wait()
+                .unwrap()
+                .success()
+            {
+                error!("Failed to enable {}", service);
+                continue;
+            }
+            if !exec_cmd("systemctl", &["start", &service], false)
+                .unwrap()
+                .wait()
+                .unwrap()
+                .success()
+            {
+                error!("Failed to start {}", service);
+                continue;
+            }
+            info!("Service {} will be maintained and kept alive", service);
+        } else {
+            info!("Service {} is still running...", service);
         }
-        if !exec_cmd("systemctl", &["start", &service], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
-        {
-            error!("Failed to start {}", service);
-            continue;
-        }
-        info!("Service {} will be maintained and kept alive", service);
     }
 }
 
