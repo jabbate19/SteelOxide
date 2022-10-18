@@ -1,4 +1,5 @@
 use crate::os::setup;
+use clap::ArgMatches;
 use crate::utils::{
     config::SysConfig,
     tools::{exec_cmd, verify_config},
@@ -185,8 +186,10 @@ fn sshd_protection() {}
 
 fn scan_file_permissions() {}
 
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let file = File::open("./config.json")?;
+pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    let default_path = "./config.json".to_owned();
+    let file_path = cmd.get_one::<String>("config").unwrap_or(&default_path);
+    let file = File::open(&file_path)?;
     let reader = BufReader::new(file);
     let config: SysConfig = serde_json::from_reader(reader)?;
     if !verify_config(&config) {

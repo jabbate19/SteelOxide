@@ -223,7 +223,9 @@ fn audit_users(config: &PfConfig) {
 }
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let file = File::open("./config.json")?;
+    let default_path = "./config.json".to_owned();
+    let file_path = cmd.get_one::<String>("config").unwrap_or(&default_path);
+    let file = File::open(&file_path)?;
     let reader = BufReader::new(file);
     let config: PfConfig = serde_json::from_reader(reader)?;
     if !verify_config(&config) {

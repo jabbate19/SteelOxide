@@ -1,4 +1,4 @@
-use clap::{App, SubCommand};
+use clap::{App, SubCommand, Arg};
 
 use chrono::prelude::*;
 use simplelog::*;
@@ -20,15 +20,25 @@ fn main() {
         .subcommand(
             SubCommand::with_name("tracker").about("Scan network traffic for malicious sessions"),
         )
-        .subcommand(SubCommand::with_name("revive").about("Red Teamn't"))
+        .subcommand(
+            SubCommand::with_name("revive")
+                .arg(
+                    Arg::with_name("config")
+                        .short('c')
+                        .long("config")
+                        .takes_value(true)
+                        .help("Provides a config file to revive to refer to"),
+                )
+                .about("Red Teamn't"),
+        )
         .subcommand(SubCommand::with_name("persistnt").about("Scan for persistence"))
         .get_matches();
 
     let dt = Local::now();
 
-    match app.subcommand_name() {
-        None => println!("No Subcommand Provided!"),
-        Some("setup") => {
+    match app.subcommand() {
+        None => panic!("No Subcommand Provided!"),
+        Some(("setup", _)) => {
             CombinedLogger::init(vec![
                 TermLogger::new(
                     LevelFilter::Info,
@@ -49,7 +59,7 @@ fn main() {
             .unwrap();
             os::setup::main().unwrap()
         }
-        Some("tracker") => {
+        Some(("tracker", _)) => {
             CombinedLogger::init(vec![
                 TermLogger::new(
                     LevelFilter::Info,
@@ -70,7 +80,7 @@ fn main() {
             .unwrap();
             os::tracker::main().unwrap()
         }
-        Some("revive") => {
+        Some(("revive", cmd)) => {
             CombinedLogger::init(vec![
                 TermLogger::new(
                     LevelFilter::Info,
@@ -89,11 +99,11 @@ fn main() {
                 ),
             ])
             .unwrap();
-            os::revive::main().unwrap()
+            os::revive::main(cmd).unwrap()
         }
-        Some("persistnt") => {
+        Some(("persistnt", _)) => {
             todo!("This is not yet implemented!");
         }
-        Some(x) => println!("Unknown Command: {}", x),
+        Some((x, _)) => panic!("Unknown Command: {}", x),
     };
 }
