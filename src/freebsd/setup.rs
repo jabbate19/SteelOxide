@@ -194,8 +194,8 @@ fn configure_firewall(config: &mut PfConfig) {
         }
     }
     output.push_str("\n#### Common Allows\n");
-    output.push_str("pass out proto {{ tcp udp }} from any to any port {{ 22 53 80 123 443 }}\n");
-    output.push_str("pass in proto {{ tcp udp }} from any port {{ 22 53 80 123 443 }} to any\n");
+    output.push_str("pass out proto { tcp udp } from any to any port { 22 53 80 123 443 }\n");
+    output.push_str("pass in proto { tcp udp } from any port { 22 53 80 123 443 } to any\n");
 
     if yes_no("Allow SSH to PfSense (Sorry @Drew)".to_owned()) {
         output.push_str("\n#### Allow SSH within Subnet\n");
@@ -295,7 +295,6 @@ fn get_version(config: &mut PfConfig) {
         }
     }
 }
-
 fn audit_users(config: &mut PfConfig) {
     let password = prompt_password("Enter password for users: ").unwrap();
     for user in UserInfo::get_all_users() {

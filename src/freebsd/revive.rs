@@ -41,8 +41,8 @@ fn configure_firewall(config: &PfConfig) {
         }
     }
     output.push_str("\n#### Common Allows\n");
-    output.push_str("pass out proto {{ tcp udp }} from any to any port {{ 22 53 80 123 443 }}\n");
-    output.push_str("pass in proto {{ tcp udp }} from any port {{ 22 53 80 123 443 }} to any\n");
+    output.push_str("pass out proto { tcp udp } from any to any port { 22 53 80 123 443 }\n");
+    output.push_str("pass in proto { tcp udp } from any port { 22 53 80 123 443 } to any\n");
 
     if yes_no("Allow SSH to PfSense (Sorry @Drew)".to_owned()) {
         output.push_str("\n#### Allow SSH within Subnet\n");
