@@ -153,10 +153,22 @@ pub fn check_hashes_check_files(dir: &Path, hashes: &Value, version: &str) {
     env::set_current_dir(&current_dir).unwrap();
 }
 
-pub fn verify_main_config() {
+pub fn verify_main_config(config: &PfConfig) {
     let diff_cmd = exec_cmd(
         "diff",
-        &["/cf/conf/config.xml", &get_fixed_file("/conf.default/config.xml".to_string(), version)],
+        &[
+            "/cf/conf/config.xml",
+            &get_fixed_file(
+                "/conf.default/config.xml".to_string(),
+                match &config.version.as_ref() {
+                    Some(version) => version,
+                    None => {
+                        error!("Version is not available to verify files");
+                        return;
+                    }
+                },
+            ),
+        ],
         false,
     )
     .unwrap()
