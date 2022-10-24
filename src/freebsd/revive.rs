@@ -1,4 +1,4 @@
-use crate::os::core::{verify_web_config, verity_etc_files};
+use crate::os::core::{verify_main_config, verify_web_config, verity_etc_files};
 use crate::os::setup;
 use crate::utils::{
     config::PfConfig,
@@ -143,6 +143,7 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     audit_users(&config);
     verify_web_config(&config);
     verity_etc_files(&config);
+    verify_main_config();
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),

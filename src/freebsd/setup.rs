@@ -1,4 +1,4 @@
-use crate::os::core::{verify_web_config, verity_etc_files};
+use crate::os::core::{verify_main_config, verify_web_config, verity_etc_files};
 use crate::utils::{
     config::{Permissions, PfConfig},
     tools::{exec_cmd, get_interface_and_ip, yes_no},
@@ -295,6 +295,7 @@ fn get_version(config: &mut PfConfig) {
         }
     }
 }
+
 fn audit_users(config: &mut PfConfig) {
     let password = prompt_password("Enter password for users: ").unwrap();
     for user in UserInfo::get_all_users() {
@@ -353,6 +354,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     get_version(&mut config);
     verify_web_config(&config);
     verity_etc_files(&config);
+    verify_main_config();
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),
