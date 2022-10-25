@@ -8,6 +8,7 @@ use log::{debug, error, info, warn};
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use clap::ArgMatches;
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");
@@ -240,20 +241,20 @@ fn select_services(config: &SysConfig) {
         .unwrap()
         .wait_with_output()
         .unwrap();
-        let service_status = match service_status_cmd.status.success() {
+        let service_status_stdout = match service_status_cmd.status.success() {
             true => {
-                let stdout = service_status_cmd.stdout;
-                String::from_utf8_lossy(stdout)
+                service_status_cmd.stdout
             }
             false => {
                 error!("Failed to get service {} status", service);
                 continue;
             }
         };
+        let service_status = String::from_utf8_lossy(&service_status_stdout);
         if service_status.trim() == "Running" {
-            info!("Service {} is running...");
+            info!("Service {} is running...", service);
         } else {
-            warn!("Service {} is not running!");
+            warn!("Service {} is not running!", service);
             if !exec_cmd(
                 "powershell",
                 &[

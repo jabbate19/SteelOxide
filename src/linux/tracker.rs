@@ -118,10 +118,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         warn!("{} was found to be malicious!", sock);
                         for pid in &pids {
                             warn!("{}", pid);
-                            pid.terminate();
-                            if yes_no("Do you want to quarantine the binary".to_owned()) {
+                            if yes_no("Do you want to quarantine/terminate the binary".to_owned()) {
                                 pid.quarantine();
-                                info!("{} quarantined", pid.exe);
+                                pid.terminate();
+                                info!("{} quarantined/terminated", pid.exe);
                             }
                         }
                     }
