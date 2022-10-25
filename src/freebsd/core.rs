@@ -192,7 +192,7 @@ pub fn get_fixed_file(mut file: String, version: &str) -> String {
     }
     let git_version = format!("RELENG_{}", version);
     let new_file_name = format!("new_{}", file.split('/').last().unwrap());
-    let hashes = reqwest::blocking::get(&format!(
+    let file_content = reqwest::blocking::get(&format!(
         "https://raw.githubusercontent.com/pfsense/pfsense/{}/{}",
         git_version, file
     ))
@@ -200,6 +200,6 @@ pub fn get_fixed_file(mut file: String, version: &str) -> String {
     .bytes()
     .unwrap();
     let mut out_file = File::open(&new_file_name).unwrap_or(File::create(&new_file_name).unwrap());
-    out_file.write(&hashes).unwrap();
+    out_file.write(&file_content).unwrap();
     new_file_name
 }

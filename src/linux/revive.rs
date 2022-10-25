@@ -1,3 +1,4 @@
+use crate::os::core::{sudo_protection, sshd_protection, scan_file_permissions, icmp_sysctl_check};
 use crate::os::setup;
 use crate::utils::{
     config::SysConfig,
@@ -189,20 +190,6 @@ fn select_services(config: &SysConfig) {
         }
     }
 }
-
-fn icmp_sysctl_check() {
-    let icmp_check = Path::new("/proc/sys/net/ipv4/icmp_echo_ignore_all");
-    if fs::read_to_string(icmp_check) == "1" {
-        warn!("ICMP Response is Disabled!");
-        fs::write(icmp_check, "0");
-    }
-}
-
-fn sudo_protection() {}
-
-fn sshd_protection() {}
-
-fn scan_file_permissions() {}
 
 pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let default_path = "./config.json".to_owned();

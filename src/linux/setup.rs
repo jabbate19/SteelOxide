@@ -1,3 +1,4 @@
+use crate::os::core::{sudo_protection, sshd_protection, scan_file_permissions, icmp_sysctl_check};
 use crate::utils::{
     config::SysConfig,
     tools::{exec_cmd, get_interface_and_ip, yes_no},
@@ -12,6 +13,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     path::Path
 };
+use std::os::unix::fs::PermissionsExt;
 
 fn configure_firewall(config: &mut SysConfig) {
     let default_services: HashMap<String, Vec<String>> = HashMap::from([
@@ -273,20 +275,6 @@ fn select_services(config: &mut SysConfig) {
         info!("Service {} will be maintained and kept alive", service);
     }
 }
-
-fn icmp_sysctl_check() {
-    let icmp_check = Path::new("/proc/sys/net/ipv4/icmp_echo_ignore_all");
-    if fs::read_to_string(icmp_check) == "1" {
-        warn!("ICMP Response is Disabled!");
-        fs::write(icmp_check, "0");
-    }
-}
-
-fn sudo_protection() {}
-
-fn sshd_protection() {}
-
-fn scan_file_permissions() {}
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = SysConfig {
