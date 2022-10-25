@@ -9,7 +9,7 @@ use std::{
 };
 
 pub fn verify_config<T: std::fmt::Debug>(config: &T) -> bool {
-    println!("{:?}", config);
+    println!("{:#?}", config);
     yes_no("Config Ok".to_owned())
 }
 
