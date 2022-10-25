@@ -1,5 +1,7 @@
 # BlueTeamRust (SteelOxide)
 ## A Blue Team Binary to Assist teams defend systems on Windows, Linux, and PfSense platforms
+## This is an expansion of my original tool found at https://github.com/jabbate19/BlueTeamPy
+## These should be considered the same project, as the python version was directly converted into Rust but a different repository for organization
 
 # Features
 * User Auditing
