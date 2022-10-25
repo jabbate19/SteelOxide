@@ -10,6 +10,7 @@ use std::{
     fs,
     io::{stdin, stdout, Write},
     net::{IpAddr, Ipv4Addr},
+    path::Path
 };
 
 fn configure_firewall(config: &mut SysConfig) {
@@ -273,6 +274,14 @@ fn select_services(config: &mut SysConfig) {
     }
 }
 
+fn icmp_sysctl_check() {
+    let icmp_check = Path::new("/proc/sys/net/ipv4/icmp_echo_ignore_all");
+    if fs::read_to_string(icmp_check) == "1" {
+        warn!("ICMP Response is Disabled!");
+        fs::write(icmp_check, "0");
+    }
+}
+
 fn sudo_protection() {}
 
 fn sshd_protection() {}
@@ -293,6 +302,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     sudo_protection();
     sshd_protection();
     scan_file_permissions();
+    icmp_sysctl_check();
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),

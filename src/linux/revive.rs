@@ -190,6 +190,14 @@ fn select_services(config: &SysConfig) {
     }
 }
 
+fn icmp_sysctl_check() {
+    let icmp_check = Path::new("/proc/sys/net/ipv4/icmp_echo_ignore_all");
+    if fs::read_to_string(icmp_check) == "1" {
+        warn!("ICMP Response is Disabled!");
+        fs::write(icmp_check, "0");
+    }
+}
+
 fn sudo_protection() {}
 
 fn sshd_protection() {}
@@ -199,15 +207,25 @@ fn scan_file_permissions() {}
 pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let default_path = "./config.json".to_owned();
     let file_path = cmd.get_one::<String>("config").unwrap_or(&default_path);
-    let file = File::open(&file_path)?;
-    let reader = BufReader::new(file);
-    let config: SysConfig = serde_json::from_reader(reader)?;
+    let file = File::open(&file_path);
+    let reader = file.map(|f| BufReader::new(f));
+    let config: SysConfig = match reader.map(|r| serde_json::from_reader(r)) {
+        Ok(x) => {
+            x
+        },
+        Err(_) => {
+            error!("Could not setup config! Moving to setup...");
+            setup::main().unwrap();
+        }
+    };
     if !verify_config(&config) {
+        warn!("Config found to be invalid! Moving to setup...");
         setup::main().unwrap();
     }
     configure_firewall(&config);
     audit_users(&config);
     select_services(&config);
+    icmp_sysctl_check()
     sudo_protection();
     sshd_protection();
     scan_file_permissions();
