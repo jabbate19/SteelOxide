@@ -1,11 +1,11 @@
 use crate::utils::tools::exec_cmd;
 use log::error;
 use std::fmt::Display;
-use std::path::Path;
 #[cfg(target_os = "linux")]
-use std::fs::{read_link, read_to_string, rename, set_permissions, Permissions};
+use std::fs::{self, read_link, read_to_string, Permissions};
 #[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
 pub struct PIDInfo {
     pub pid: u64,
@@ -53,9 +53,23 @@ impl PIDInfo {
 
     pub fn quarantine(&self) {
         let current_path = Path::new(&self.exe);
-        let new_path = Path::new(&format!("./quarantine/{}", current_path.file_name().unwrap()));
-        fs::rename(current_path, new_path);
-        fs::set_permissions(new_path, Permissions::from_mode(0o400));
+        let new_path_str = format!(
+            "./quarantine/{}",
+            current_path.file_name().unwrap().to_str().unwrap()
+        );
+        let new_path = Path::new(&new_path_str);
+        match fs::rename(current_path, new_path) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("Failed to move {}", &self.exe);
+            }
+        }
+        match fs::set_permissions(new_path, Permissions::from_mode(0o400)) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("Failed to chmod 400 for {}", &self.exe);
+            }
+        }
     }
 }
 
@@ -149,7 +163,10 @@ impl PIDInfo {
 
     pub fn quarantine(&self) {
         let current_path = Path::new(&self.exe);
-        let new_path = Path::new(&format!("./quarantine/{}", current_path.file_name().unwrap()));
+        let new_path = Path::new(&format!(
+            "./quarantine/{}",
+            current_path.file_name().unwrap()
+        ));
         fs::rename(current_path, new_path);
         fs::set_permissions(new_path, Permissions::from_mode(0o400));
     }
@@ -218,7 +235,10 @@ impl PIDInfo {
 
     pub fn quarantine(&self) {
         let current_path = Path::new(&self.exe);
-        let new_path = Path::new(&format!("./quarantine/{}", current_path.file_name().unwrap()));
+        let new_path = Path::new(&format!(
+            "./quarantine/{}",
+            current_path.file_name().unwrap()
+        ));
         fs::rename(current_path, new_path);
         println!("Please revoke all execution access, or get this thing out of here");
     }

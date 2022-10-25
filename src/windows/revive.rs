@@ -4,11 +4,11 @@ use crate::utils::{
     tools::{exec_cmd, verify_config, yes_no},
     user::{ADUserInfo, LocalUserInfo},
 };
+use clap::ArgMatches;
 use log::{debug, error, info, warn};
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
-use clap::ArgMatches;
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");
@@ -242,9 +242,7 @@ fn select_services(config: &SysConfig) {
         .wait_with_output()
         .unwrap();
         let service_status_stdout = match service_status_cmd.status.success() {
-            true => {
-                service_status_cmd.stdout
-            }
+            true => service_status_cmd.stdout,
             false => {
                 error!("Failed to get service {} status", service);
                 continue;

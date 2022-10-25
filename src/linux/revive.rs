@@ -1,4 +1,4 @@
-use crate::os::core::{sudo_protection, sshd_protection, scan_file_permissions, icmp_sysctl_check};
+use crate::os::core::{icmp_sysctl_check, scan_file_permissions, sshd_protection, sudo_protection};
 use crate::os::setup;
 use crate::utils::{
     config::SysConfig,
@@ -197,22 +197,26 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open(&file_path);
     let reader = file.map(|f| BufReader::new(f));
     let config: SysConfig = match reader.map(|r| serde_json::from_reader(r)) {
-        Ok(x) => {
-            x
+        Ok(x) => match x {
+            Ok(y) => y,
+            Err(_) => {
+                error!("Could not setup config! Moving to setup...");
+                return Ok(setup::main().unwrap());
+            }
         },
         Err(_) => {
             error!("Could not setup config! Moving to setup...");
-            setup::main().unwrap();
+            return Ok(setup::main().unwrap());
         }
     };
     if !verify_config(&config) {
         warn!("Config found to be invalid! Moving to setup...");
-        setup::main().unwrap();
+        return Ok(setup::main().unwrap());
     }
     configure_firewall(&config);
     audit_users(&config);
     select_services(&config);
-    icmp_sysctl_check()
+    icmp_sysctl_check();
     sudo_protection();
     sshd_protection();
     scan_file_permissions();

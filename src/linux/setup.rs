@@ -1,4 +1,4 @@
-use crate::os::core::{sudo_protection, sshd_protection, scan_file_permissions, icmp_sysctl_check};
+use crate::os::core::{icmp_sysctl_check, scan_file_permissions, sshd_protection, sudo_protection};
 use crate::utils::{
     config::SysConfig,
     tools::{exec_cmd, get_interface_and_ip, yes_no},
@@ -11,9 +11,7 @@ use std::{
     fs,
     io::{stdin, stdout, Write},
     net::{IpAddr, Ipv4Addr},
-    path::Path
 };
-use std::os::unix::fs::PermissionsExt;
 
 fn configure_firewall(config: &mut SysConfig) {
     let default_services: HashMap<String, Vec<String>> = HashMap::from([
