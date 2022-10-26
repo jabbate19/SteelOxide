@@ -3,7 +3,9 @@ use log::error;
 use std::fmt::Display;
 use std::fs;
 #[cfg(not(target_os = "windows"))]
-use std::fs::{read_link, read_to_string, Permissions};
+use std::fs::Permissions;
+#[cfg(target_os = "linux")]
+use std::fs::{read_link, read_to_string};
 #[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -183,8 +185,18 @@ impl PIDInfo {
             current_path.file_name().unwrap().to_str().unwrap()
         );
         let new_path = Path::new(&new_path_str);
-        fs::rename(current_path, new_path);
-        fs::set_permissions(new_path, Permissions::from_mode(0o400));
+        match fs::rename(current_path, new_path) {
+            Ok(_) => {},
+            Err(_) => {
+                error!("Failed to move {}", &self.exe);
+            }
+        };
+        match fs::set_permissions(new_path, Permissions::from_mode(0o400)) {
+            Ok(_) => {},
+            Err(_) => {
+                error!("Failed to chmod 400 {}", &self.exe);
+            }
+        };
     }
 }
 

@@ -32,6 +32,9 @@ fn main() {
                 .about("Undo common service break tactics"),
         )
         .subcommand(
+            SubCommand::with_name("password").about("Reset all passwords"),
+        )
+        .subcommand(
             SubCommand::with_name("persistnt")
                 .about("(NOT IMPLEMENTED) Scan for persistence methods referring to a given file"),
         )
@@ -103,6 +106,27 @@ fn main() {
             ])
             .unwrap();
             os::revive::main(cmd).unwrap()
+        }
+        Some(("password", _)) => {
+            CombinedLogger::init(vec![
+                TermLogger::new(
+                    LevelFilter::Debug,
+                    Config::default(),
+                    TerminalMode::Mixed,
+                    ColorChoice::Auto,
+                ),
+                WriteLogger::new(
+                    LevelFilter::Info,
+                    Config::default(),
+                    File::create(&format!(
+                        "steeloxide_password_{}.log",
+                        dt.format("%Y_%m_%d_%H_%M_%S").to_string()
+                    ))
+                    .unwrap(),
+                ),
+            ])
+            .unwrap();
+            utils::password::main().unwrap()
         }
         Some(("persistnt", _)) => {
             todo!("This is not yet implemented!");

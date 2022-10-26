@@ -1,4 +1,4 @@
-use crate::os::core::{verify_main_config, verify_web_config, verity_etc_files};
+use crate::os::core::{verify_main_config, verify_web_config, verity_etc_files, sshd_protection, scan_file_permissions};
 use crate::os::setup;
 use crate::utils::{
     config::PfConfig,
