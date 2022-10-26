@@ -39,8 +39,11 @@ impl Socket {
         })
     }
 
-    pub fn analyze_pid(&self) -> PIDInfo {
-        PIDInfo::new(self.pid.parse().unwrap()).unwrap()
+    pub fn analyze_pid(&self) -> Option<PIDInfo> {
+        match &self.pid.parse::<u64>() {
+            Ok(pid) => PIDInfo::new(*pid),
+            Err(_) => None,
+        }
     }
 }
 
@@ -63,7 +66,11 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             .wait_with_output()
             .unwrap();
         if ss.status.success() {
-            for line in String::from_utf8_lossy(&ss.stdout).split("\n") {
+            let ss_stdout = ss.stdout;
+            let line_str = String::from_utf8_lossy(&ss_stdout);
+            let mut lines = line_str.split("\n");
+            let _ = lines.next();
+            for line in lines {
                 let sock = match Socket::new(line.to_string()) {
                     Ok(sock) => sock,
                     Err(_) => continue,
@@ -71,17 +78,24 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let pid = sock.analyze_pid();
                 if !safe.contains(&sock) {
                     println!("{}", sock);
-                    println!("{}", pid);
-                    if yes_no("Keep socket".to_string()) {
-                        info!("{} kept", sock);
-                        safe.insert(sock);
-                    } else {
-                        pid.terminate();
-                        warn!("{} was found to be malicious!", sock);
-                        warn!("PID: {}", pid);
-                        if yes_no("Do you want to quarantine the binary".to_owned()) {
-                            pid.quarantine();
-                            info!("{} quarantined", pid.exe);
+                    match pid {
+                        Some(p) => {
+                            println!("{}", p);
+                            if yes_no("Keep socket".to_string()) {
+                                info!("{} kept", sock);
+                                safe.insert(sock);
+                            } else {
+                                p.terminate();
+                                warn!("{} was found to be malicious!", sock);
+                                warn!("PID: {}", p);
+                                if yes_no("Do you want to quarantine the binary".to_owned()) {
+                                    p.quarantine();
+                                    info!("{} quarantined", p.exe);
+                                }
+                            }
+                        },
+                        None => {
+                            println!("PID Info Unavailable")
                         }
                     }
                 }

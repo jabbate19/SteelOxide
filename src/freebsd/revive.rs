@@ -112,7 +112,7 @@ fn configure_firewall(config: &PfConfig) {
 fn audit_users(config: &PfConfig) {
     // let password = prompt_password("Enter password for valid users: ").unwrap();
     for user in UserInfo::get_all_users() {
-        println!("{:?}", user);
+        info!("{:?}", user);
         if user.uid == 0 {
             warn!("{} has root UID!", user.username);
         } else if user.uid < 1000 {
@@ -142,8 +142,10 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     configure_firewall(&config);
     audit_users(&config);
     verify_web_config(&config);
-    verity_etc_files(&config);
-    verify_main_config();
+    // verity_etc_files(&config);
+    verify_main_config(&config);
+    sshd_protection();
+    scan_file_permissions();
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),

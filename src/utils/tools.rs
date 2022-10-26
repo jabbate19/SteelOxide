@@ -87,7 +87,7 @@ pub fn sha1sum(filepath: String) -> Result<String, Box<dyn std::error::Error>> {
     let hexes = hasher.finalize();
     let mut out = String::new();
     for hex in hexes {
-        out.push_str(&format!("{:x?}", hex));
+        out.push_str(&format!("{:02x?}", hex));
     }
     Ok(out)
 }

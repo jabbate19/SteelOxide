@@ -280,13 +280,16 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn new(line: String) -> Result<UserInfo, Box<dyn std::error::Error>> {
+    pub fn new(line: String) -> Option<UserInfo> {
         let comps: Vec<&str> = line.split(":").collect();
-        Ok(UserInfo {
+        if comps.len() < 7 {
+            return None;
+        }
+        Some(UserInfo {
             username: comps[0].to_owned(),
             password: comps[1].to_owned(),
-            uid: comps[2].parse()?,
-            gid: comps[3].parse()?,
+            uid: comps[2].parse().unwrap(),
+            gid: comps[3].parse().unwrap(),
             userinfo: comps[4].to_owned(),
             homedir: comps[5].to_owned(),
             shell: comps[6].to_owned(),
@@ -299,7 +302,7 @@ impl UserInfo {
             // Consumes the iterator, returns an (Optional) String
             for line in lines {
                 if let Ok(entry) = line {
-                    if let Ok(user) = UserInfo::new(entry) {
+                    if let Some(user) = UserInfo::new(entry) {
                         out.push(user);
                     }
                 }
@@ -330,78 +333,92 @@ impl UserInfo {
         {
             error!("Failed to lock user {} shell", &self.username);
         }
-        if !exec_cmd(
-            "/usr/bin/gpasswd",
-            &["--delete", &self.username, "sudo"],
-            false,
-        )
-        .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to remove sudo from user {}", &self.username);
-        }
-        if !exec_cmd(
-            "/usr/bin/gpasswd",
-            &["--delete", &self.username, "wheel"],
-            false,
-        )
-        .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to remove wheel from user {}", &self.username);
-        }
+        // if !exec_cmd(
+        //     "/usr/bin/gpasswd",
+        //     &["--delete", &self.username, "sudo"],
+        //     false,
+        // )
+        // .unwrap()
+        // .wait()
+        // .unwrap()
+        // .success()
+        // {
+        //     error!("Failed to remove sudo from user {}", &self.username);
+        // }
+        // if !exec_cmd(
+        //     "/usr/bin/gpasswd",
+        //     &["--delete", &self.username, "wheel"],
+        //     false,
+        // )
+        // .unwrap()
+        // .wait()
+        // .unwrap()
+        // .success()
+        // {
+        //     error!("Failed to remove wheel from user {}", &self.username);
+        // }
     }
 
     #[cfg(target_os = "freebsd")]
     pub fn shutdown(&self) {
-        if !exec_cmd("/usr/sbin/pw", &["lock", &self.username], false)
+        let lock = exec_cmd("/usr/sbin/pw", &["lock", &self.username], false)
             .unwrap()
-            .wait()
-            .unwrap()
-            .success()
-        {
-            error!("Failed to lock user {} password", &self.username);
+            .wait_with_output()
+            .unwrap();
+        if !lock.status.success() {
+            error!(
+                "Failed to lock user {} password: {}",
+                &self.username,
+                String::from_utf8_lossy(&lock.stderr)
+            );
         }
-        if !exec_cmd(
+        let usermod = exec_cmd(
             "/usr/sbin/pw",
-            &["usermod", "-s", "/bin/false", &self.username],
+            &["usermod", &self.username, "-s", "/bin/false"],
             false,
         )
         .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to lock user {} shell", &self.username);
+        .wait_with_output()
+        .unwrap();
+        if !usermod.status.success() {
+            error!(
+                "Failed to lock user {} shell: {}",
+                &self.username,
+                String::from_utf8_lossy(&usermod.stderr)
+            );
         }
-        if !exec_cmd("/usr/sbin/pw", &["wheel", "-d", &self.username], false)
-            .unwrap()
-            .wait()
-            .unwrap()
-            .success()
-        {
-            error!("Failed to remove wheel from user {}", &self.username);
+        let remove_wheel = exec_cmd(
+            "/usr/sbin/pw",
+            &["groupmod", "wheel", "-d", &self.username],
+            false,
+        )
+        .unwrap()
+        .wait_with_output()
+        .unwrap();
+        if !remove_wheel.status.success() {
+            error!(
+                "Failed to remove wheel from user {}: {}",
+                &self.username,
+                String::from_utf8_lossy(&remove_wheel.stderr)
+            );
         }
     }
 
     pub fn change_password(&self, password: &str) {
-        let mut proc = exec_cmd("/usr/bin/passwd", &[&self.username], true).unwrap();
+        let proc = exec_cmd("/usr/bin/passwd", &[&self.username], true).unwrap();
+        let pass = format!("{}\n{}\n", password, password);
         proc.stdin
             .as_ref()
             .unwrap()
-            .write_all(password.as_bytes())
+            .write_all(&pass.as_bytes())
             .unwrap();
-        proc.stdin
-            .as_ref()
-            .unwrap()
-            .write_all(password.as_bytes())
-            .unwrap();
-        if !proc.wait().unwrap().success() {
-            error!("Failed to reset user {} password", &self.username);
+        let proc_final = proc.wait_with_output().unwrap();
+        if !proc_final.status.success() {
+            error!(
+                "Failed to reset user {} password: {}",
+                &self.username,
+                String::from_utf8_lossy(&proc_final.stderr)
+            );
         }
     }
 }

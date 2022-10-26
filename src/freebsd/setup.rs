@@ -1,4 +1,6 @@
-use crate::os::core::{verify_main_config, verify_web_config, verity_etc_files};
+use crate::os::core::{
+    scan_file_permissions, sshd_protection, verify_main_config, verify_web_config, verity_etc_files,
+};
 use crate::utils::{
     config::{Permissions, PfConfig},
     tools::{exec_cmd, get_interface_and_ip, yes_no},
@@ -287,9 +289,11 @@ fn get_version(config: &mut PfConfig) {
         let _ = stdout().flush();
         let mut version = String::new();
         stdin().read_line(&mut version).unwrap();
-        if versions.contains(&&version[..]) {
+        let version = version.trim();
+        if versions.contains(&version) {
             info!("PfSense version identifed as {}", version);
-            config.version = Some(version);
+            config.version = Some(version.to_owned());
+            break;
         } else if version == "N/A" {
             break;
         }
@@ -299,7 +303,7 @@ fn get_version(config: &mut PfConfig) {
 fn audit_users(config: &mut PfConfig) {
     let password = prompt_password("Enter password for users: ").unwrap();
     for user in UserInfo::get_all_users() {
-        println!("{:?}", user);
+        info!("{:?}", user);
         if user.uid == 0 {
             warn!("{} has root UID!", user.username);
         } else if user.uid < 1000 {
@@ -325,7 +329,11 @@ fn audit_users(config: &mut PfConfig) {
         let cron_stdout = match cron_cmd.status.success() {
             true => cron_cmd.stdout,
             false => {
-                error!("Failed to get cron jobs for {}", user.username);
+                error!(
+                    "Failed to get cron jobs for {}: {}",
+                    user.username,
+                    String::from_utf8_lossy(&cron_cmd.stderr)
+                );
                 continue;
             }
         };
@@ -353,8 +361,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     audit_users(&mut config);
     get_version(&mut config);
     verify_web_config(&config);
-    verity_etc_files(&config);
-    verify_main_config();
+    //verity_etc_files(&config);
+    verify_main_config(&config);
+    sshd_protection();
+    scan_file_permissions();
     fs::write(
         "config.json",
         serde_json::to_string_pretty(&config).unwrap(),

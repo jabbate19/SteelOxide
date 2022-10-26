@@ -6,7 +6,6 @@ use log::{error, info, warn};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fs::create_dir;
-use std::net::{IpAddr, SocketAddr};
 
 #[derive(Eq, Hash, PartialEq)]
 struct Socket {
@@ -14,10 +13,8 @@ struct Socket {
     state: String,
     recv_q: String,
     send_q: String,
-    local_addr: IpAddr,
-    local_port: u16,
-    peer_addr: IpAddr,
-    peer_port: u16,
+    local_addr: String,
+    peer_addr: String,
     process: String,
 }
 
@@ -28,18 +25,20 @@ impl Socket {
         let state = comps.next().ok_or("Error parsing line")?.to_owned();
         let recv_q = comps.next().ok_or("Error parsing line")?.to_owned();
         let send_q = comps.next().ok_or("Error parsing line")?.to_owned();
-        let local: SocketAddr = comps.next().ok_or("Error parsing line")?.parse()?;
-        let peer: SocketAddr = comps.next().ok_or("Error parsing line")?.parse()?;
-        let process = comps.next().ok_or("Error parsing line")?.to_owned();
+        let local = comps.next().ok_or("Error parsing line")?.to_owned();
+        let peer = comps.next().ok_or("Error parsing line")?.to_owned();
+        let process = match comps.next() {
+            Some(proc) => proc,
+            None => "N/A",
+        }
+        .to_owned();
         Ok(Socket {
             net_id,
             state,
             recv_q,
             send_q,
-            local_addr: local.ip(),
-            local_port: local.port(),
-            peer_addr: peer.ip(),
-            peer_port: peer.port(),
+            local_addr: local,
+            peer_addr: peer,
             process,
         })
     }
@@ -77,15 +76,13 @@ impl Display for Socket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
-            "{} | {} | {} | {} | {}:{} | {}:{} | {}",
+            "{} | {} | {} | {} | {} | {} | {}",
             self.net_id,
             self.state,
             self.recv_q,
             self.send_q,
             self.local_addr,
-            self.local_port,
             self.peer_addr,
-            self.peer_port,
             self.process
         )
     }
@@ -100,10 +97,19 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             .wait_with_output()
             .unwrap();
         if ss.status.success() {
-            for line in String::from_utf8_lossy(&ss.stdout).split("\n") {
+            let out = String::from_utf8_lossy(&ss.stdout);
+            // debug!("{}", out);
+            let splits: Vec<&str> = out.split("\n").collect();
+            for line in &splits[1..] {
+                if line.len() == 0 {
+                    continue;
+                }
                 let sock = match Socket::new(line.to_string()) {
                     Ok(sock) => sock,
-                    Err(_) => continue,
+                    Err(e) => {
+                        error!("Error making socket: {}", e);
+                        continue;
+                    }
                 };
                 let pids = sock.analyze_pid();
                 if !safe.contains(&sock) {

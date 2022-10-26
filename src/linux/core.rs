@@ -22,40 +22,9 @@ pub fn icmp_sysctl_check() {
 }
 
 pub fn sudo_protection() {
-    let _ = fs::create_dir("./sudo");
-    for g in ["sudo", "wheel"] {
-        let getent_cmd = exec_cmd("/usr/bin/getent", &["group", g], false)
-            .unwrap()
-            .wait_with_output()
-            .unwrap();
-        let getent_stdout = match getent_cmd.status.success() {
-            true => getent_cmd.stdout,
-            false => {
-                error!("Failed to get {} members", g);
-                continue;
-            }
-        };
-        let getent_str = String::from_utf8_lossy(&getent_stdout).to_string();
-        let sudo_users = getent_str.trim().split(":").last().unwrap().split(",");
-        for user in sudo_users {
-            if yes_no(format!("Remove {} from {}", &user, g)) {
-                if !exec_cmd("/usr/bin/gpasswd", &["-d", &user, &g], false)
-                    .unwrap()
-                    .wait()
-                    .unwrap()
-                    .success()
-                {
-                    error!("Failed to remove {} from {}", g, &user);
-                    continue;
-                }
-            } else {
-                warn!("{} has {} power", &user, g);
-            }
-        }
-    }
     let sudoers_path = Path::new("/etc/sudoers");
     let sudoers_d_path = Path::new("/etc/sudoers.d");
-    match fs::copy(sudoers_path, "/sudo/sudoers") {
+    match fs::copy(sudoers_path, "./sudo/sudoers") {
         Ok(_) => {
             info!("Copied /etc/sudoers");
         }
@@ -63,7 +32,7 @@ pub fn sudo_protection() {
             error!("Failed to copy /etc/sudoers");
         }
     }
-    match fs::copy(sudoers_d_path, "/sudo/sudoers.d") {
+    match fs::copy(sudoers_d_path, "./sudo/sudoers.d") {
         Ok(_) => {
             info!("Copied /etc/sudoers.d");
         }
@@ -72,24 +41,62 @@ pub fn sudo_protection() {
         }
     }
     let sudo_group = yes_no("Yes for Sudo, No for Wheel".to_string());
+    let _ = fs::create_dir("./sudo");
+    let mut g = "wheel";
+    if sudo_group {
+        g = "sudo";
+    }
+    let getent_cmd = exec_cmd("/usr/bin/getent", &["group", g], false)
+        .unwrap()
+        .wait_with_output()
+        .unwrap();
+    let getent_stdout = match getent_cmd.status.success() {
+        true => getent_cmd.stdout,
+        false => {
+            error!("Failed to get {} members", g);
+            Vec::new()
+        }
+    };
+    let getent_str = String::from_utf8_lossy(&getent_stdout).to_string();
+    let sudo_users = getent_str.trim().split(":").last().unwrap().split(",");
+    for user in sudo_users {
+        if user.len() == 0 {
+            continue;
+        }
+        if yes_no(format!("Remove {} from {}", &user, g)) {
+            if !exec_cmd("/usr/bin/gpasswd", &["-d", &user, &g], false)
+                .unwrap()
+                .wait()
+                .unwrap()
+                .success()
+            {
+                error!("Failed to remove {} from {}", g, &user);
+                continue;
+            }
+        } else {
+            warn!("{} has {} power", &user, g);
+        }
+    }
+    open_firewall();
     let file_content = match sudo_group {
         true => reqwest::blocking::get(
-            "https://raw.githubusercontent.com/jababte19/blueteamrust/mastet/data/sudoers_sudo",
+            "https://raw.githubusercontent.com/jabbate19/blueteamrust/master/data/sudoers_sudo",
         ),
         false => reqwest::blocking::get(
-            "https://raw.githubusercontent.com/jababte19/blueteamrust/mastet/data/sudoers_wheel",
+            "https://raw.githubusercontent.com/jabbate19/blueteamrust/master/data/sudoers_wheel",
         ),
     }
     .unwrap()
     .bytes()
     .unwrap();
+    close_firewall();
     match fs::set_permissions(sudoers_path, fs::Permissions::from_mode(0o540)) {
         Ok(_) => {}
         Err(_) => {
             error!("Failed to chmod /etc/sudoers to 540");
         }
     }
-    let mut out_file = File::open(sudoers_path).unwrap();
+    let mut out_file = File::create(sudoers_path).unwrap();
     out_file.write(&file_content).unwrap();
     match fs::set_permissions(sudoers_path, fs::Permissions::from_mode(0o440)) {
         Ok(_) => {}
@@ -125,19 +132,21 @@ pub fn sshd_protection() {
             error!("Failed to copy ssh files");
         }
     }
+    open_firewall();
     let file_content = reqwest::blocking::get(
-        "https://raw.githubusercontent.com/jababte19/blueteamrust/mastet/data/sshd_config",
+        "https://raw.githubusercontent.com/jabbate19/blueteamrust/master/data/sshd_config",
     )
     .unwrap()
     .bytes()
     .unwrap();
+    close_firewall();
     match fs::set_permissions("/etc/ssh/sshd_config", fs::Permissions::from_mode(0o540)) {
         Ok(_) => {}
         Err(_) => {
             error!("Failed to set sshd_config perms to 540");
         }
     }
-    let mut out_file = File::open("/etc/ssh/sshd_config").unwrap();
+    let mut out_file = File::create("/etc/ssh/sshd_config").unwrap();
     out_file.write(&file_content).unwrap();
     match fs::set_permissions("/etc/ssh/sshd_config", fs::Permissions::from_mode(0o440)) {
         Ok(_) => {}
@@ -233,13 +242,7 @@ pub fn scan_file_permissions() {
         .unwrap()
         .wait_with_output()
         .unwrap();
-    let find_stdout = match find_cmd.status.success() {
-        true => find_cmd.stdout,
-        false => {
-            error!("Failed to execute find SUID");
-            Vec::new()
-        }
-    };
+    let find_stdout = find_cmd.stdout;
     let find_str = String::from_utf8_lossy(&find_stdout).to_string();
     for line in find_str.split("\n") {
         if line.len() == 0 {
@@ -252,13 +255,7 @@ pub fn scan_file_permissions() {
         .unwrap()
         .wait_with_output()
         .unwrap();
-    let find_stdout = match find_cmd.status.success() {
-        true => find_cmd.stdout,
-        false => {
-            error!("Failed to execute find SGID");
-            Vec::new()
-        }
-    };
+    let find_stdout = find_cmd.stdout;
     let find_str = String::from_utf8_lossy(&find_stdout).to_string();
     for line in find_str.split("\n") {
         if line.len() == 0 {
@@ -270,7 +267,7 @@ pub fn scan_file_permissions() {
     let find_cmd = exec_cmd(
         "/usr/bin/find",
         &[
-            "/", "-type", "d", r"\(", "-perm", "-g+w", "-or", "-perm", "-o+w", r"\)", "-print",
+            "/", "-type", "d", "(", "-perm", "-g+w", "-or", "-perm", "-o+w", ")", "-print",
         ],
         false,
     )
@@ -280,7 +277,10 @@ pub fn scan_file_permissions() {
     let find_stdout = match find_cmd.status.success() {
         true => find_cmd.stdout,
         false => {
-            error!("Failed to execute find world-writable dirs");
+            error!(
+                "Failed to execute find world-writable dirs: {}",
+                String::from_utf8_lossy(&find_cmd.stderr)
+            );
             Vec::new()
         }
     };
@@ -305,7 +305,10 @@ pub fn scan_file_permissions() {
     let find_stdout = match find_cmd.status.success() {
         true => find_cmd.stdout,
         false => {
-            error!("Failed to execute find world-writable files");
+            error!(
+                "Failed to execute find world-writable files: {}",
+                String::from_utf8_lossy(&find_cmd.stderr)
+            );
             Vec::new()
         }
     };
@@ -315,5 +318,45 @@ pub fn scan_file_permissions() {
             continue;
         }
         warn!("{} is world writable!", line);
+    }
+}
+
+pub fn open_firewall() {
+    if !exec_cmd("/usr/sbin/iptables", &["-P", "INPUT", "ACCEPT"], false)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to open INPUT");
+    }
+
+    if !exec_cmd("/usr/sbin/iptables", &["-P", "OUTPUT", "ACCEPT"], false)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to open OUTPUT");
+    }
+}
+
+pub fn close_firewall() {
+    if !exec_cmd("/usr/sbin/iptables", &["-P", "INPUT", "DROP"], false)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to close INPUT");
+    }
+
+    if !exec_cmd("/usr/sbin/iptables", &["-P", "OUTPUT", "DROP"], false)
+        .unwrap()
+        .wait()
+        .unwrap()
+        .success()
+    {
+        error!("Failed to close OUTPUT");
     }
 }

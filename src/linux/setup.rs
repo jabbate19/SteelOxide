@@ -126,7 +126,21 @@ fn configure_firewall(config: &mut SysConfig) {
         error!("Failed to set default iptables forward to accept");
     };
     info!("Firewall has been wiped");
-    if exec_cmd(
+    if !exec_cmd(
+        "/usr/sbin/iptables",
+        &["-A", "INPUT", "-p", "imcp", "-j", "ACCEPT"],
+        false,
+    )
+    .unwrap()
+    .wait()
+    .unwrap()
+    .success()
+    {
+        info!("Added ICMP Rule");
+    } else {
+        error!("Failed to add ICMP INPUT ACCEPT rule");
+    }
+    if !exec_cmd(
         "/usr/sbin/iptables",
         &["-A", "INPUT", "-p", "imcp", "-j", "ACCEPT"],
         false,
@@ -212,7 +226,7 @@ fn audit_users(config: &mut SysConfig) {
         if user.gid == 0 {
             warn!("{} has root GID!", user.username);
         }
-        println!("{:?}", user);
+        info!("{:?}", user);
         if !["/bin/false", "/usr/bin/nologin"].contains(&&user.shell[..]) {
             if yes_no(format!("Keep user {}", &user.username)) {
                 config.users.push(String::from(&user.username));
@@ -230,7 +244,11 @@ fn audit_users(config: &mut SysConfig) {
         let cron_stdout = match cron_cmd.status.success() {
             true => cron_cmd.stdout,
             false => {
-                error!("Failed to get cron jobs for {}", user.username);
+                error!(
+                    "Failed to get cron jobs for {}: {}",
+                    user.username,
+                    String::from_utf8_lossy(&cron_cmd.stderr)
+                );
                 continue;
             }
         };
@@ -252,22 +270,28 @@ fn select_services(config: &mut SysConfig) {
         config.services.push(service);
     }
     for service in &config.services {
-        if !exec_cmd("/usr/bin/systemctl", &["enable", &service], false)
+        let enable = exec_cmd("/usr/bin/systemctl", &["enable", &service], false)
             .unwrap()
-            .wait()
-            .unwrap()
-            .success()
-        {
-            error!("Failed to enable {}", service);
+            .wait_with_output()
+            .unwrap();
+        if !enable.status.success() {
+            error!(
+                "Failed to enable {}: {}",
+                service,
+                String::from_utf8_lossy(&enable.stderr)
+            );
             continue;
         }
-        if !exec_cmd("/usr/bin/systemctl", &["start", &service], false)
+        let start = exec_cmd("/usr/bin/systemctl", &["start", &service], false)
             .unwrap()
-            .wait()
-            .unwrap()
-            .success()
-        {
-            error!("Failed to start {}", service);
+            .wait_with_output()
+            .unwrap();
+        if !start.status.success() {
+            error!(
+                "Failed to enable {}: {}",
+                service,
+                String::from_utf8_lossy(&start.stderr)
+            );
             continue;
         }
         info!("Service {} will be maintained and kept alive", service);
