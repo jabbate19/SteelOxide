@@ -52,12 +52,19 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = create_dir("./quarantine");
     let mut safe: HashSet<Socket> = HashSet::new();
     loop {
-        let netstat = exec_cmd("C:\\Windows\\System32\\curl.exe", &["-noq"], false)
+        let netstat = exec_cmd("C:\\Windows\\System32\\netstat.exe", &["-noq"], false)
             .unwrap()
             .wait_with_output()
             .unwrap();
         if netstat.status.success() {
-            for line in String::from_utf8_lossy(&netstat.stdout).split("\n") {
+            let stdout = netstat.stdout;
+            let lines_str = String::from_utf8_lossy(&stdout);
+            let mut lines = lines_str.split("\n");
+            lines.next();
+            lines.next();
+            lines.next();
+            lines.next();
+            for line in lines {
                 let sock = match Socket::new(line.to_string()) {
                     Ok(sock) => sock,
                     Err(_) => continue,
@@ -75,7 +82,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         warn!("PID: {}", pid);
                         if yes_no("Do you want to quarantine the binary".to_owned()) {
                             pid.quarantine();
-                            info!("{} quarantined", pid.exe);
                         }
                     }
                 }

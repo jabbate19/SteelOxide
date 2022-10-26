@@ -3,11 +3,10 @@ use crate::os::core::{
 };
 use crate::utils::{
     config::{Permissions, PfConfig},
-    tools::{exec_cmd, get_interface_and_ip, yes_no},
+    tools::{exec_cmd, get_interface_and_ip, get_password, yes_no},
     user::UserInfo,
 };
 use log::{error, info, warn};
-use rpassword::prompt_password;
 use std::collections::HashMap;
 use std::fs::{self, read_to_string};
 use std::io::{stdin, stdout, Write};
@@ -301,7 +300,7 @@ fn get_version(config: &mut PfConfig) {
 }
 
 fn audit_users(config: &mut PfConfig) {
-    let password = prompt_password("Enter password for users: ").unwrap();
+    let password = get_password();
     for user in UserInfo::get_all_users() {
         info!("{:?}", user);
         if user.uid == 0 {

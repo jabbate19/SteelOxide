@@ -217,8 +217,6 @@ pub fn get_fixed_file(mut file: String, version: &str) -> String {
     }
     let git_version = format!("RELENG_{}", version);
     let new_file_name = format!("new_{}", file.split('/').last().unwrap());
-    println!("https://raw.githubusercontent.com/pfsense/pfsense/{}/{}",
-    git_version, file);
     let file_content = reqwest::blocking::get(&format!(
         "https://raw.githubusercontent.com/pfsense/pfsense/{}/{}",
         git_version, file
@@ -406,7 +404,8 @@ pub fn scan_file_permissions() {
     let find_cmd = exec_cmd(
         "/usr/bin/find",
         &[
-            "/", r"!", "-path", "*/proc/*", r"(", "-perm", "-g+w", "-or", "-perm", "-o+w", r")", "-type", "f", "-print",
+            "/", r"!", "-path", "*/proc/*", r"(", "-perm", "-g+w", "-or", "-perm", "-o+w", r")",
+            "-type", "f", "-print",
         ],
         false,
     )

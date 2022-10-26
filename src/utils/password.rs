@@ -1,5 +1,5 @@
-use rpassword::prompt_password;
 use crate::utils::user::UserInfo;
+use rpassword::prompt_password;
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let password = prompt_password("Enter password for users: ").unwrap();

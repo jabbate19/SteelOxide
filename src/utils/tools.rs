@@ -1,4 +1,5 @@
 use get_if_addrs::{get_if_addrs, Interface};
+use rpassword::prompt_password;
 use sha1::{Digest, Sha1};
 use std::process::{Command, Stdio};
 use std::{
@@ -90,4 +91,14 @@ pub fn sha1sum(filepath: String) -> Result<String, Box<dyn std::error::Error>> {
         out.push_str(&format!("{:02x?}", hex));
     }
     Ok(out)
+}
+
+pub fn get_password() -> String {
+    loop {
+        let p1 = prompt_password("Provide password: ").unwrap();
+        let p2 = prompt_password("Confirm password: ").unwrap();
+        if p1 == p2 {
+            return p1;
+        }
+    }
 }

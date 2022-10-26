@@ -1,5 +1,7 @@
 use crate::utils::tools::exec_cmd;
 use log::error;
+#[cfg(target_os = "windows")]
+use log::info;
 use std::fmt::Display;
 use std::fs;
 #[cfg(not(target_os = "windows"))]
@@ -122,9 +124,7 @@ impl PIDInfo {
         let mut cmdline: Vec<String> = Vec::new();
         for line in cmdline_full.split('\n') {
             cmdline.push(match line.split_once(':') {
-                Some(x) => {
-                    x.1.trim().to_owned()
-                },
+                Some(x) => x.1.trim().to_owned(),
                 None => {
                     continue;
                 }
@@ -147,9 +147,7 @@ impl PIDInfo {
         let mut environ: Vec<String> = Vec::new();
         for line in environ_full.split('\n') {
             environ.push(match line.split_once(':') {
-                Some(x) => {
-                    x.1.trim().to_owned()
-                },
+                Some(x) => x.1.trim().to_owned(),
                 None => {
                     continue;
                 }
@@ -186,13 +184,13 @@ impl PIDInfo {
         );
         let new_path = Path::new(&new_path_str);
         match fs::rename(current_path, new_path) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
                 error!("Failed to move {}", &self.exe);
             }
         };
         match fs::set_permissions(new_path, Permissions::from_mode(0o400)) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
                 error!("Failed to chmod 400 {}", &self.exe);
             }
@@ -269,7 +267,9 @@ impl PIDInfo {
         );
         let new_path = Path::new(&new_path_str);
         match fs::rename(current_path, new_path) {
-            Ok(_) => {}
+            Ok(_) => {
+                info!("{} quarantined", &self.exe);
+            }
             Err(_) => {
                 error!("Failed to move {}", &self.exe);
             }

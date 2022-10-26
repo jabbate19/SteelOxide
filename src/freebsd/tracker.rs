@@ -93,7 +93,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     info!("{} quarantined", p.exe);
                                 }
                             }
-                        },
+                        }
                         None => {
                             println!("PID Info Unavailable")
                         }

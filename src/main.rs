@@ -31,9 +31,7 @@ fn main() {
                 )
                 .about("Undo common service break tactics"),
         )
-        .subcommand(
-            SubCommand::with_name("password").about("Reset all passwords"),
-        )
+        .subcommand(SubCommand::with_name("password").about("Reset all passwords"))
         .subcommand(
             SubCommand::with_name("persistnt")
                 .about("(NOT IMPLEMENTED) Scan for persistence methods referring to a given file"),

@@ -6,68 +6,76 @@ use crate::utils::{
 };
 use clap::ArgMatches;
 use log::{debug, error, info, warn};
-use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");
-    if !exec_cmd(
+    let reset = exec_cmd(
         "C:\\Windows\\System32\\netsh.exe",
         &["advfirewall", "reset"],
         false,
     )
     .unwrap()
-    .wait()
-    .unwrap()
-    .success()
-    {
-        error!("Failed to reset firewall!");
+    .wait_with_output()
+    .unwrap();
+    if !reset.status.success() {
+        error!(
+            "Failed to reset firewall: {}",
+            String::from_utf8_lossy(&reset.stderr)
+        );
     };
-    if !exec_cmd(
+    let on = exec_cmd(
         "C:\\Windows\\System32\\netsh.exe",
         &["advfirewall", "set", "allprofiles", "state", "on"],
         false,
     )
     .unwrap()
-    .wait()
-    .unwrap()
-    .success()
-    {
-        error!("Failed to turn on firewalls!");
+    .wait_with_output()
+    .unwrap();
+    if !on.status.success() {
+        error!(
+            "Failed to turn on firewalls: {}",
+            String::from_utf8_lossy(&on.stderr)
+        );
     };
-    if !exec_cmd(
+    let clear = exec_cmd(
         "C:\\Windows\\System32\\netsh.exe",
         &["advfirewall", "firewall", "delete", "rule", "name=all"],
         false,
     )
     .unwrap()
-    .wait()
-    .unwrap()
-    .success()
-    {
-        error!("Failed to delete old firewall rules!");
+    .wait_with_output()
+    .unwrap();
+    if !clear.status.success() {
+        error!(
+            "Failed to delete old firewall rules: {}",
+            String::from_utf8_lossy(&clear.stderr)
+        );
     };
     info!("Firewall has been wiped");
     debug!("Adding New Rules");
-    if !exec_cmd(
+    let block_all = exec_cmd(
         "C:\\Windows\\System32\\netsh.exe",
         &[
             "advfirewall",
             "set",
+            "currentprofile",
             "firewallpolicy",
             "blockinbound,blockoutbound",
         ],
         false,
     )
     .unwrap()
-    .wait()
-    .unwrap()
-    .success()
-    {
-        error!("Failed to block firewall in/out!");
+    .wait_with_output()
+    .unwrap();
+    if !block_all.status.success() {
+        error!(
+            "Failed to block firewall in/out: {}",
+            String::from_utf8_lossy(&block_all.stderr)
+        );
     };
-    if !exec_cmd(
+    let add_icmp_in = exec_cmd(
         "C:\\Windows\\System32\\netsh.exe",
         &[
             "advfirewall",
@@ -77,19 +85,51 @@ fn configure_firewall(config: &SysConfig) {
             "name=\"ICMP\"",
             "action=allow",
             "protocol=icmpv4:8,any",
+            "dir=in",
         ],
         false,
     )
     .unwrap()
-    .wait()
-    .unwrap()
-    .success()
-    {
-        error!("Failed to allow ICMP!");
+    .wait_with_output()
+    .unwrap();
+
+    if add_icmp_in.status.success() {
+        info!("Added ICMP In Rule");
+    } else {
+        error!(
+            "Failed to allow ICMP in: {}",
+            String::from_utf8_lossy(&add_icmp_in.stderr)
+        );
     };
-    info!("Added ICMP Rule");
+
+    let add_icmp_out = exec_cmd(
+        "C:\\Windows\\System32\\netsh.exe",
+        &[
+            "advfirewall",
+            "firewall",
+            "add",
+            "rule",
+            "name=\"ICMP\"",
+            "action=allow",
+            "protocol=icmpv4:0,any",
+            "dir=out",
+        ],
+        false,
+    )
+    .unwrap()
+    .wait_with_output()
+    .unwrap();
+    if add_icmp_out.status.success() {
+        info!("Added ICMP Out Rule");
+    } else {
+        error!(
+            "Failed to allow ICMP Out: {}",
+            String::from_utf8_lossy(&add_icmp_out.stderr)
+        );
+    };
+
     for port in &config.ports {
-        if !exec_cmd(
+        let tcp_in = exec_cmd(
             "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
@@ -105,13 +145,16 @@ fn configure_firewall(config: &SysConfig) {
             false,
         )
         .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to add allow in tcp port {}!", port);
+        .wait_with_output()
+        .unwrap();
+        if !tcp_in.status.success() {
+            error!(
+                "Failed to add allow in tcp port {}: {}",
+                port,
+                String::from_utf8_lossy(&tcp_in.stderr)
+            );
         };
-        if !exec_cmd(
+        let tcp_out = exec_cmd(
             "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
@@ -127,13 +170,16 @@ fn configure_firewall(config: &SysConfig) {
             false,
         )
         .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to add allow out tcp port {}!", port);
+        .wait_with_output()
+        .unwrap();
+        if !tcp_out.status.success() {
+            error!(
+                "Failed to add allow out tcp port {}: {}",
+                port,
+                String::from_utf8_lossy(&tcp_out.stderr)
+            );
         };
-        if !exec_cmd(
+        let udp_in = exec_cmd(
             "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
@@ -149,13 +195,16 @@ fn configure_firewall(config: &SysConfig) {
             false,
         )
         .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to add allow in udp port {}!", port);
+        .wait_with_output()
+        .unwrap();
+        if !udp_in.status.success() {
+            error!(
+                "Failed to add allow in udp port {}: {}",
+                port,
+                String::from_utf8_lossy(&udp_in.stderr)
+            );
         };
-        if !exec_cmd(
+        let udp_out = exec_cmd(
             "C:\\Windows\\System32\\netsh.exe",
             &[
                 "advfirewall",
@@ -171,11 +220,14 @@ fn configure_firewall(config: &SysConfig) {
             false,
         )
         .unwrap()
-        .wait()
-        .unwrap()
-        .success()
-        {
-            error!("Failed to add allow out udp port {}!", port);
+        .wait_with_output()
+        .unwrap();
+        if !udp_out.status.success() {
+            error!(
+                "Failed to add allow out udp port {}: {}",
+                port,
+                String::from_utf8_lossy(&udp_out.stderr)
+            );
         };
         info!("Add Port {} Rule", port);
     }
@@ -200,7 +252,7 @@ fn audit_local_users(config: &SysConfig) {
             warn!("AD User {} was found active and disabled", user.name);
             user.shutdown();
         }
-        //user.change_password(&password);
+        // user.change_password(&password);
     }
 }
 
@@ -220,8 +272,8 @@ fn audit_ad_users(config: &SysConfig) {
             warn!("{} is an administrator!", user.name);
         }
         if user.enabled && !config.users.contains(&user.name) {
-            warn!("AD User {} was found active and disabled", user.name);
             user.shutdown();
+            warn!("AD User {} was found active and disabled", user.name);
         }
         // user.change_password(&password);
     }
@@ -291,11 +343,5 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         audit_ad_users(&config);
     }
     select_services(&config);
-    fs::write(
-        "config.json",
-        serde_json::to_string_pretty(&config).unwrap(),
-    )
-    .unwrap();
-    info!("Data on system has been added to config.json");
     Ok(())
 }

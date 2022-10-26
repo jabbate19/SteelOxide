@@ -1,11 +1,10 @@
 use crate::os::core::{icmp_sysctl_check, scan_file_permissions, sshd_protection, sudo_protection};
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, get_interface_and_ip, yes_no},
+    tools::{exec_cmd, get_interface_and_ip, get_password, yes_no},
     user::UserInfo,
 };
 use log::{debug, error, info, warn};
-use rpassword::prompt_password;
 use std::{
     collections::HashMap,
     fs,
@@ -216,7 +215,7 @@ fn configure_firewall(config: &mut SysConfig) {
 }
 
 fn audit_users(config: &mut SysConfig) {
-    let password = prompt_password("Enter password for users: ").unwrap();
+    let password = get_password();
     for user in UserInfo::get_all_users() {
         if user.uid == 0 {
             warn!("{} has root UID!", user.username);
