@@ -1,7 +1,7 @@
 use crate::os::core::{icmp_sysctl_check, scan_file_permissions, sshd_protection, sudo_protection};
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, get_interface_and_ip, get_password, yes_no},
+    tools::{exec_cmd, get_interface_and_ip, get_password, sha1sum_vec, yes_no},
     user::UserInfo,
 };
 use log::{debug, error, info, warn};
@@ -212,6 +212,22 @@ fn configure_firewall(config: &mut SysConfig) {
         }
         info!("Add Port {} Rule", port);
     }
+
+    let fw_cmd = exec_cmd("/usr/sbin/iptables", &["-L"], false)
+        .unwrap()
+        .wait_with_output()
+        .unwrap();
+    let mut fw_stdout = fw_cmd.stdout;
+
+    let fw_mangle_cmd = exec_cmd("/usr/sbin/iptables", &["-t", "MANGLE", "-L"], false)
+        .unwrap()
+        .wait_with_output()
+        .unwrap();
+    let mut fw_mangle_stdout = fw_mangle_cmd.stdout;
+
+    fw_stdout.append(&mut fw_mangle_stdout);
+
+    config.firewall_hash = sha1sum_vec(&fw_stdout).unwrap();
 }
 
 fn audit_users(config: &mut SysConfig) {
@@ -304,6 +320,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         ports: Vec::new(),
         services: Vec::new(),
         users: Vec::new(),
+        firewall_hash: String::new(),
     };
     configure_firewall(&mut config);
     audit_users(&mut config);

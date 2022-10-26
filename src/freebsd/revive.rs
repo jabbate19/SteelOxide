@@ -4,7 +4,7 @@ use crate::os::core::{
 use crate::os::setup;
 use crate::utils::{
     config::PfConfig,
-    tools::{exec_cmd, verify_config, yes_no},
+    tools::{exec_cmd, sha1sum, verify_config, yes_no},
     user::UserInfo,
 };
 use clap::ArgMatches;
@@ -12,6 +12,15 @@ use log::{error, info, warn};
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use std::os::unix::fs::PermissionsExt;
+
+fn check_firewall(config: &PfConfig) {
+    if sha1sum("/tmp/rules.debug".to_owned()).unwrap() != config.firewall_hash {
+        warn!("Firewall was tampered!");
+        warn!("{}", fs::read_to_string("/tmp/rules.debug").unwrap());
+        configure_firewall(&config);
+    }
+}
 
 fn configure_firewall(config: &PfConfig) {
     let mut output = String::from("block all\n");
@@ -64,16 +73,12 @@ fn configure_firewall(config: &PfConfig) {
         ));
         info!("Blocking SSH to Router");
         if yes_no("In that case, want me to just kill SSH all together?".to_owned()) {
-            let sshd_chmod = exec_cmd("/bin/chmod", &["444", "/etc/sshd"], false)
-                .unwrap()
-                .wait()
-                .unwrap();
-            if sshd_chmod.success() {
-                info!("Disabled /etc/sshd");
-            } else {
-                error!("Failed to chmod /etc/sshd");
+            match fs::set_permissions("/etc/sshd", fs::Permissions::from_mode(0o444)) {
+                Ok(_) => {}
+                Err(_) => {
+                    error!("Failed to chmod /etc/sshd to 444");
+                }
             }
-
             println!("Just make sure to stop it in the pf console");
         }
     }
@@ -89,25 +94,21 @@ fn configure_firewall(config: &PfConfig) {
     ));
     info!("Added rules for webconfig");
 
-    let cp_old = exec_cmd("/bin/cp", &["/etc/pf.conf", "/root/old_pf.conf"], false)
+    match fs::rename("/etc/pf.conf", "/root/old_pf.conf") {
+        Ok(_) => {}
+        Err(_) => {
+            error!("Failed to move old pf.conf!");
+        }
+    }
+    fs::write("/etc/pf.conf", output).unwrap();
+    let set_rules = exec_cmd("/sbin/pfctl", &["-f", "/etc/pf.conf"], false)
         .unwrap()
         .wait()
         .unwrap();
-    if cp_old.success() {
-        fs::write("/etc/pf.conf", output).unwrap();
-        let set_rules = exec_cmd("/sbin/pfctl", &["-f", "/etc/pf.conf"], false)
-            .unwrap()
-            .wait()
-            .unwrap();
-        if set_rules.success() {
-            info!("Rules have been applied to system!");
-        } else {
-            error!("Error in applying rules");
-        }
+    if set_rules.success() {
+        info!("Rules have been applied to system!");
     } else {
-        error!("Error in copying old pf.conf");
-        fs::write("./new_pf.conf", output).unwrap();
-        error!("New pf.conf saved as ./new_pf.conf");
+        error!("Error in applying rules");
     }
 }
 
@@ -141,7 +142,7 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     if !verify_config(&config) {
         setup::main().unwrap();
     }
-    configure_firewall(&config);
+    check_firewall(&config);
     audit_users(&config);
     verify_web_config(&config);
     // verity_etc_files(&config);

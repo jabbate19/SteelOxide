@@ -93,6 +93,17 @@ pub fn sha1sum(filepath: String) -> Result<String, Box<dyn std::error::Error>> {
     Ok(out)
 }
 
+pub fn sha1sum_vec(v: &Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+    let mut hasher = Sha1::new();
+    hasher.update(v);
+    let hexes = hasher.finalize();
+    let mut out = String::new();
+    for hex in hexes {
+        out.push_str(&format!("{:02x?}", hex));
+    }
+    Ok(out)
+}
+
 pub fn get_password() -> String {
     loop {
         let p1 = prompt_password("Provide password: ").unwrap();

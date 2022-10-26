@@ -8,6 +8,7 @@ pub struct SysConfig {
     pub ports: Vec<String>,
     pub services: Vec<String>,
     pub users: Vec<String>,
+    pub firewall_hash: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,4 +32,5 @@ pub struct PfConfig {
     pub version: Option<String>,
     pub permissions: Vec<Permissions>,
     pub users: Vec<String>,
+    pub firewall_hash: String,
 }

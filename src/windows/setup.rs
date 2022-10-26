@@ -1,6 +1,6 @@
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, get_interface_and_ip, get_password, yes_no},
+    tools::{exec_cmd, get_interface_and_ip, get_password, sha1sum_vec, yes_no},
     user::{ADUserInfo, LocalUserInfo},
 };
 use log::{debug, error, info, warn};
@@ -295,6 +295,29 @@ fn configure_firewall(config: &mut SysConfig) {
         };
         info!("Add Port {} Rule", port);
     }
+
+    let fw_cmd = exec_cmd(
+        "C:\\Windows\\System32\\netsh.exe",
+        &["advfirewall", "firewall", "show", "rule", "name=all"],
+        false,
+    )
+    .unwrap()
+    .wait_with_output()
+    .unwrap();
+    let mut fw_stdout = fw_cmd.stdout;
+
+    let fw_on_cmd = exec_cmd(
+        "C:\\Windows\\System32\\netsh.exe",
+        &["advfirewall", "show", "currentprofile", "firewallpolicy"],
+        false,
+    )
+    .unwrap()
+    .wait_with_output()
+    .unwrap();
+    let mut fw_on_stdout = fw_on_cmd.stdout;
+    fw_stdout.append(&mut fw_on_stdout);
+
+    config.firewall_hash = sha1sum_vec(&fw_stdout).unwrap();
 }
 
 fn audit_local_users(config: &mut SysConfig, password: &String) {
@@ -505,6 +528,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         ports: Vec::new(),
         services: Vec::new(),
         users: Vec::new(),
+        firewall_hash: String::new(),
     };
     configure_firewall(&mut config);
     let password = get_password();

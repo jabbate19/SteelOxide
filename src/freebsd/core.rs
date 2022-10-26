@@ -209,6 +209,9 @@ pub fn verify_main_config(config: &PfConfig) {
     let diff = String::from_utf8_lossy(&diff_stdout);
     info!("config.xml diff");
     info!("{}", diff);
+    if !yes_no("Does this look normal".to_owned()) {
+        warn!("config.xml was tampered!");
+    }
 }
 
 pub fn get_fixed_file(mut file: String, version: &str) -> String {

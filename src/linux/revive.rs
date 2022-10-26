@@ -2,13 +2,39 @@ use crate::os::core::{icmp_sysctl_check, scan_file_permissions, sshd_protection,
 use crate::os::setup;
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, verify_config},
+    tools::{exec_cmd, sha1sum_vec, verify_config},
     user::UserInfo,
 };
 use clap::ArgMatches;
 use log::{debug, error, info, warn};
 use std::fs::File;
 use std::io::BufReader;
+
+fn check_firewall(config: &SysConfig) {
+    let fw_cmd = exec_cmd("/usr/sbin/iptables", &["-L"], false)
+        .unwrap()
+        .wait_with_output()
+        .unwrap();
+
+    let fw_mangle_cmd = exec_cmd("/usr/sbin/iptables", &["-t", "MANGLE", "-L"], false)
+        .unwrap()
+        .wait_with_output()
+        .unwrap();
+
+    if fw_cmd.status.success() && fw_mangle_cmd.status.success() {
+        let mut fw_stdout = fw_cmd.stdout;
+        let mut fw_mangle_stdout = fw_mangle_cmd.stdout;
+        fw_stdout.append(&mut fw_mangle_stdout);
+        let hash = sha1sum_vec(&fw_stdout).unwrap();
+        if hash != config.firewall_hash {
+            warn!("Firewall was tampered!");
+            warn!("{}", String::from_utf8_lossy(&fw_stdout));
+            configure_firewall(&config);
+        }
+    } else {
+        error!("Failed to get firewall!");
+    }
+}
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");
@@ -213,7 +239,7 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         warn!("Config found to be invalid! Moving to setup...");
         return Ok(setup::main().unwrap());
     }
-    configure_firewall(&config);
+    check_firewall(&config);
     audit_users(&config);
     select_services(&config);
     icmp_sysctl_check();

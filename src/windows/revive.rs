@@ -1,13 +1,47 @@
 use crate::os::setup;
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, verify_config, yes_no},
+    tools::{exec_cmd, sha1sum_vec, verify_config, yes_no},
     user::{ADUserInfo, LocalUserInfo},
 };
 use clap::ArgMatches;
 use log::{debug, error, info, warn};
 use std::fs::File;
 use std::io::BufReader;
+
+fn check_firewall(config: &SysConfig) {
+    let fw_cmd = exec_cmd(
+        "C:\\Windows\\System32\\netsh.exe",
+        &["advfirewall", "firewall", "show", "rule", "name=all"],
+        false,
+    )
+    .unwrap()
+    .wait_with_output()
+    .unwrap();
+
+    let fw_on_cmd = exec_cmd(
+        "C:\\Windows\\System32\\netsh.exe",
+        &["advfirewall", "show", "currentprofile", "firewallpolicy"],
+        false,
+    )
+    .unwrap()
+    .wait_with_output()
+    .unwrap();
+
+    if fw_cmd.status.success() && fw_on_cmd.status.success() {
+        let mut fw_stdout = fw_cmd.stdout;
+        let mut fw_on_stdout = fw_on_cmd.stdout;
+        fw_stdout.append(&mut fw_on_stdout);
+        let hash = sha1sum_vec(&fw_stdout).unwrap();
+        if hash != config.firewall_hash {
+            warn!("Firewall was tampered!");
+            warn!("{}", String::from_utf8_lossy(&fw_stdout));
+            configure_firewall(&config);
+        }
+    } else {
+        error!("Failed to get firewall!");
+    }
+}
 
 fn configure_firewall(config: &SysConfig) {
     debug!("Resetting Firewall and deleting old rules");
@@ -336,7 +370,7 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     if !verify_config(&config) {
         setup::main().unwrap();
     }
-    configure_firewall(&config);
+    check_firewall(&config);
     //let password = prompt_password("Enter password for valid users: ").unwrap();
     audit_local_users(&config);
     if yes_no("Check AD Users (Must be on AD Server)".to_owned()) {
