@@ -365,5 +365,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .unwrap();
     info!("Data on system has been added to config.json");
+    info!("Your config has is {} REMEMBER THIS", sha1sum("config.json".to_string()).unwrap());
     Ok(())
 }

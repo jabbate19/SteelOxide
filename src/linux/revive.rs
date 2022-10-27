@@ -235,7 +235,7 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
             return Ok(setup::main().unwrap());
         }
     };
-    if !verify_config(&config) {
+    if !verify_config((&file_path).to_string()) {
         warn!("Config found to be invalid! Moving to setup...");
         return Ok(setup::main().unwrap());
     }

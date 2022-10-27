@@ -1,6 +1,6 @@
 use crate::utils::{
     config::SysConfig,
-    tools::{exec_cmd, get_interface_and_ip, get_password, sha1sum_vec, yes_no},
+    tools::{exec_cmd, get_interface_and_ip, get_password, sha1sum, sha1sum_vec, yes_no},
     user::{ADUserInfo, LocalUserInfo},
 };
 use log::{debug, error, info, warn};
@@ -545,5 +545,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .unwrap();
     info!("Data on system has been added to config.json");
+    info!("Your config has is {} REMEMBER THIS", sha1sum("config.json".to_string()).unwrap());
     Ok(())
 }

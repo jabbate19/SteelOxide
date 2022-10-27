@@ -138,9 +138,22 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let file_path = cmd.get_one::<String>("config").unwrap_or(&default_path);
     let file = File::open(&file_path)?;
     let reader = BufReader::new(file);
-    let config: PfConfig = serde_json::from_reader(reader)?;
-    if !verify_config(&config) {
-        setup::main().unwrap();
+    let config: PfConfig = match reader.map(|r| serde_json::from_reader(r)) {
+        Ok(x) => match x {
+            Ok(y) => y,
+            Err(_) => {
+                error!("Could not setup config! Moving to setup...");
+                return Ok(setup::main().unwrap());
+            }
+        },
+        Err(_) => {
+            error!("Could not setup config! Moving to setup...");
+            return Ok(setup::main().unwrap());
+        }
+    };
+    if !verify_config((&file_path).to_string()) {
+        warn!("Config found to be invalid! Moving to setup...");
+        return setup::main().unwrap();
     }
     check_firewall(&config);
     audit_users(&config);
@@ -149,11 +162,5 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     verify_main_config(&config);
     sshd_protection();
     scan_file_permissions();
-    fs::write(
-        "config.json",
-        serde_json::to_string_pretty(&config).unwrap(),
-    )
-    .unwrap();
-    info!("Data on system has been added to config.json");
     Ok(())
 }

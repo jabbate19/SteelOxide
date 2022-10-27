@@ -9,9 +9,8 @@ use std::{
     process::Child,
 };
 
-pub fn verify_config<T: std::fmt::Debug>(config: &T) -> bool {
-    println!("{:#?}", config);
-    yes_no("Config Ok".to_owned())
+pub fn verify_config(path: String) -> bool {
+    yes_no(format!("Is config hash ok: {}", sha1sum(path).unwrap()))
 }
 
 pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
