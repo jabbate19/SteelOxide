@@ -138,22 +138,16 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let file_path = cmd.get_one::<String>("config").unwrap_or(&default_path);
     let file = File::open(&file_path)?;
     let reader = BufReader::new(file);
-    let config: PfConfig = match reader.map(|r| serde_json::from_reader(r)) {
-        Ok(x) => match x {
-            Ok(y) => y,
-            Err(_) => {
-                error!("Could not setup config! Moving to setup...");
-                return Ok(setup::main().unwrap());
-            }
-        },
+    let config: PfConfig = match serde_json::from_reader(reader) {
+        Ok(x) => x,
         Err(_) => {
             error!("Could not setup config! Moving to setup...");
-            return Ok(setup::main().unwrap());
+            return setup::main();
         }
     };
     if !verify_config((&file_path).to_string()) {
         warn!("Config found to be invalid! Moving to setup...");
-        return setup::main().unwrap();
+        return setup::main();
     }
     check_firewall(&config);
     audit_users(&config);

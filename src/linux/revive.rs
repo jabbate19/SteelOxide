@@ -227,17 +227,17 @@ pub fn main(cmd: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
             Ok(y) => y,
             Err(_) => {
                 error!("Could not setup config! Moving to setup...");
-                return Ok(setup::main().unwrap());
+                return setup::main();
             }
         },
         Err(_) => {
             error!("Could not setup config! Moving to setup...");
-            return Ok(setup::main().unwrap());
+            return setup::main();
         }
     };
     if !verify_config((&file_path).to_string()) {
         warn!("Config found to be invalid! Moving to setup...");
-        return Ok(setup::main().unwrap());
+        return setup::main();
     }
     check_firewall(&config);
     audit_users(&config);
