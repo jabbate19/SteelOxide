@@ -314,7 +314,9 @@ fn audit_users(config: &mut PfConfig) {
                 info!("Local User {} was found and disabled", user.username);
             }
         }
-        user.change_password(&password);
+        if yes_no(format!("Change password for {}", &user.username)) {
+            user.change_password(&password);
+        }
         let cron_cmd = exec_cmd("/usr/bin/crontab", &["-u", &user.username, "-l"], false)
             .unwrap()
             .wait_with_output()

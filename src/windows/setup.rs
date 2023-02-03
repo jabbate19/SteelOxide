@@ -372,7 +372,9 @@ fn audit_ad_users(config: &mut SysConfig, password: &String) {
                 info!("AD User {} was found and disabled", user.name);
             }
         }
-        user.change_password(&password);
+        if yes_no(format!("Change password for {}", &user.name)) {
+            user.change_password(&password);
+        }
     }
 }
 
