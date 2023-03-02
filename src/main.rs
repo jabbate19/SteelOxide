@@ -14,9 +14,16 @@ pub mod utils;
 fn main() {
     let app = App::new("SteelOxide")
         .author("Joe Abbate, joe.abbate@mail.rit.edu")
-        .version("1.0.0")
+        .version("1.1.0")
         .about("Defends Linux, Windows, and PfSense devices against Malicious Actors")
         .subcommand(SubCommand::with_name("setup").about("Used to Setup Initial Environement"))
+        .subcommand(SubCommand::with_name("preset").arg(
+            Arg::with_name("config")
+                .short('c')
+                .long("config")
+                .takes_value(true)
+                .help("Provides a config file to revive to refer to"),
+        ).about("Used to Setup Initial Environement w/ preset file"))
         .subcommand(
             SubCommand::with_name("tracker").about("Scan network traffic for malicious sessions"),
         )
@@ -125,6 +132,27 @@ fn main() {
             ])
             .unwrap();
             utils::password::main().unwrap()
+        }
+        Some(("preset", cmd)) => {
+            CombinedLogger::init(vec![
+                TermLogger::new(
+                    LevelFilter::Debug,
+                    Config::default(),
+                    TerminalMode::Mixed,
+                    ColorChoice::Auto,
+                ),
+                WriteLogger::new(
+                    LevelFilter::Info,
+                    Config::default(),
+                    File::create(&format!(
+                        "steeloxide_preset_{}.log",
+                        dt.format("%Y_%m_%d_%H_%M_%S").to_string()
+                    ))
+                    .unwrap(),
+                ),
+            ])
+            .unwrap();
+            os::preset::main(cmd).unwrap()
         }
         Some(("persistnt", _)) => {
             todo!("This is not yet implemented!");

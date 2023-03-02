@@ -404,9 +404,29 @@ impl UserInfo {
         }
     }
 
+    #[cfg(target_os = "linux")]
     pub fn change_password(&self, password: &str) {
         let proc = exec_cmd("/usr/bin/passwd", &[&self.username], true).unwrap();
         let pass = format!("{}\n{}\n", password, password);
+        proc.stdin
+            .as_ref()
+            .unwrap()
+            .write_all(&pass.as_bytes())
+            .unwrap();
+        let proc_final = proc.wait_with_output().unwrap();
+        if !proc_final.status.success() {
+            error!(
+                "Failed to reset user {} password: {}",
+                &self.username,
+                String::from_utf8_lossy(&proc_final.stderr)
+            );
+        }
+    }
+
+    #[cfg(target_os = "freebsd")]
+    pub fn change_password(&self, password: &str) {
+        let proc = exec_cmd("/usr/sbin/pw", &["usermod", &self.username, "-h", "0"], true).unwrap();
+        let pass = format!("{}\n", password);
         proc.stdin
             .as_ref()
             .unwrap()
